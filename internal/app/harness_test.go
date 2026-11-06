@@ -168,7 +168,13 @@ type service struct {
 // chemin du faux plakar et une adresse libre sont fournis s'ils manquent.
 func startService(t *testing.T, plakar *fakePlakar, clk *clock, env map[string]string) *service {
 	t.Helper()
-	a, err := tryStartService(plakar, clk, env)
+	return startServiceWith(t, plakar.path(), clk, env)
+}
+
+// startServiceWith démarre le service sur ce binaire plakar.
+func startServiceWith(t *testing.T, plakarBin string, clk *clock, env map[string]string) *service {
+	t.Helper()
+	a, err := tryStartServiceWith(plakarBin, clk, env)
 	if err != nil {
 		t.Fatalf("démarrage du service : %v", err)
 	}
@@ -178,9 +184,15 @@ func startService(t *testing.T, plakar *fakePlakar, clk *clock, env map[string]s
 
 // tryStartService démarre le service et renvoie son erreur de démarrage.
 func tryStartService(plakar *fakePlakar, clk *clock, env map[string]string) (*app.App, error) {
+	return tryStartServiceWith(plakar.path(), clk, env)
+}
+
+// tryStartServiceWith démarre le service sur ce binaire plakar et renvoie son
+// erreur de démarrage.
+func tryStartServiceWith(plakarBin string, clk *clock, env map[string]string) (*app.App, error) {
 	full := map[string]string{
 		"PLAKAR_UI_ADDR":       "127.0.0.1:0",
-		"PLAKAR_UI_PLAKAR_BIN": plakar.path(),
+		"PLAKAR_UI_PLAKAR_BIN": plakarBin,
 	}
 	for k, v := range env {
 		full[k] = v
@@ -208,7 +220,7 @@ func (s *service) get(path string) (int, string) {
 }
 
 // row est le contenu affiché d'une ligne du tableau de bord : le texte de
-// chaque cellule, par nom de champ.
+// chaque cellule, par nom de champ, et son infobulle sous « <champ>.title ».
 type row map[string]string
 
 // dashboard lit le tableau de bord une fois tous les Relevés de démarrage
@@ -254,6 +266,9 @@ func parseDashboard(t *testing.T, body string) (names []string, rows map[string]
 			}
 			if field, ok := attr(n, "data-field"); ok && current != nil {
 				current[field] = text(n)
+				if title, ok := attr(n, "title"); ok {
+					current[field+".title"] = title
+				}
 			}
 		}
 		for c := n.FirstChild; c != nil; c = c.NextSibling {

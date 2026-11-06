@@ -8,7 +8,7 @@
 <h1>Stores</h1>
 <table>
 <thead>
-<tr><th>Store</th><th>Dernier snapshot</th><th>Âge</th><th>ID</th><th>Taille</th><th>Durée</th><th>Source</th><th>Tags</th><th>Erreur</th></tr>
+<tr><th>Store</th><th>Dernier snapshot</th><th>Âge</th><th>ID</th><th>Taille</th><th>Écart de taille</th><th>Durée</th><th>Écart de durée</th><th>Source</th><th>Tags</th><th>Erreur</th></tr>
 </thead>
 <tbody>
 {{- range .}}
@@ -19,11 +19,13 @@
 <td data-field="age">{{.Age}}</td>
 <td data-field="id">{{.ID}}</td>
 <td data-field="size">{{.Size}}</td>
+<td data-field="size-ecart"{{with .Previous}} title="{{.}}"{{end}}>{{.SizeEcart}}</td>
 <td data-field="duration">{{.Duration}}</td>
+<td data-field="duration-ecart"{{with .Previous}} title="{{.}}"{{end}}>{{.DurationEcart}}</td>
 <td data-field="path">{{.Path}}</td>
 <td data-field="tags">{{.Tags}}</td>
 {{- else}}
-<td data-field="latest" colspan="7">{{.Message}}</td>
+<td data-field="latest" colspan="9">{{.Message}}</td>
 {{- end}}
 <td data-field="error">{{.Error}}</td>
 </tr>

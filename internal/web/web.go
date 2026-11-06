@@ -2,15 +2,18 @@
 package web
 
 import (
+	"cmp"
 	"embed"
 	"fmt"
 	"html/template"
 	"log/slog"
+	"math"
 	"net/http"
 	"strings"
 	"time"
 
 	"plakar-ui/internal/catalogue"
+	"plakar-ui/internal/releve"
 )
 
 //go:embed templates/*.html
@@ -46,9 +49,13 @@ type row struct {
 	Error string
 }
 
-// snapshot est le Dernier snapshot d'une ligne, mis en forme.
+// snapshot est le Dernier snapshot d'une ligne, mis en forme, avec l'Écart
+// (vide sans Snapshot précédent).
 type snapshot struct {
 	Date, Age, ID, Size, Duration, Path, Tags string
+	SizeEcart, DurationEcart                  string
+	// Previous décrit le Snapshot précédent, auquel l'Écart compare.
+	Previous string
 }
 
 func newRow(e catalogue.Entry, now time.Time, loc *time.Location) row {
@@ -74,7 +81,35 @@ func newRow(e catalogue.Entry, now time.Time, loc *time.Location) row {
 		Path:     s.Path,
 		Tags:     strings.Join(s.Tags, ", "),
 	}
+	// Le Relevé ne produit un Écart qu'avec un Snapshot précédent.
+	if ec, p := e.Releve.Ecart, e.Releve.Previous; ec != nil {
+		r.Latest.Previous = fmt.Sprintf("par rapport au Snapshot précédent %s (%s, %s)", p.ID, p.Size.Text, p.Duration)
+		r.Latest.SizeEcart = sizeEcart(*ec)
+		r.Latest.DurationEcart = signed(cmp.Compare(ec.Duration, 0), ec.Duration.Abs().String())
+	}
 	return r
+}
+
+// sizeEcart écrit l'Écart de taille en pourcentage arrondi : « −97 % ».
+func sizeEcart(e releve.Ecart) string {
+	if e.SizeFromZero {
+		return "nouveau"
+	}
+	pct := math.Round(e.Size * 100)
+	return signed(cmp.Compare(pct, 0), fmt.Sprintf("%.0f\u00a0%%", math.Abs(pct)))
+}
+
+// signed préfixe une valeur absolue du signe donné par sign (−1, 0 ou 1) :
+// « + », « − », ou rien si elle est nulle.
+func signed(sign int, abs string) string {
+	switch sign {
+	case -1:
+		return "−" + abs
+	case 1:
+		return "+" + abs
+	default:
+		return abs
+	}
 }
 
 // age écrit un âge relatif : « il y a 6 h ».

@@ -1,5 +1,6 @@
 // Package releve fait le Relevé d'un Store : il interroge le Store par
-// `plakar at @<store> ls -tags` pour connaître son Dernier snapshot.
+// `plakar at @<store> ls -tags` pour connaître son Dernier snapshot, son
+// Snapshot précédent et l'Écart entre les deux.
 package releve
 
 import (
@@ -38,8 +39,36 @@ type Result struct {
 	At time.Time
 	// Latest est le Dernier snapshot, nil si le Store n'en a aucun.
 	Latest *Snapshot
+	// Previous est le Snapshot précédent, nil si le Store a moins de deux
+	// snapshots.
+	Previous *Snapshot
+	// Ecart compare Latest à Previous ; nil sans Snapshot précédent.
+	Ecart *Ecart
 	// Err est l'erreur du Relevé ; le Store est alors Injoignable.
 	Err error
+}
+
+// Ecart est la variation entre le Dernier snapshot et le Snapshot précédent.
+// Ce n'est qu'une indication pour l'œil : il ne change pas l'État du Store.
+type Ecart struct {
+	// Size est la variation relative de taille : −0.97 pour −97 %.
+	Size float64
+	// SizeFromZero indique que le Snapshot précédent pesait 0 B, alors que le
+	// Dernier snapshot pèse quelque chose : Size n'a alors pas de sens.
+	SizeFromZero bool
+	// Duration est la durée du Dernier snapshot moins celle du précédent.
+	Duration time.Duration
+}
+
+func newEcart(latest, previous Snapshot) *Ecart {
+	e := &Ecart{Duration: latest.Duration - previous.Duration}
+	switch {
+	case previous.Size.Bytes > 0:
+		e.Size = latest.Size.Bytes/previous.Size.Bytes - 1
+	case latest.Size.Bytes > 0:
+		e.SizeFromZero = true
+	}
+	return e
 }
 
 // Run fait le Relevé du Store. Le Store n'est ouvert que le temps de la
@@ -53,17 +82,26 @@ func Run(ctx context.Context, p plakar.Plakar, store string, now func() time.Tim
 	case err != nil:
 		r.Err = err
 	default:
-		r.Latest, r.Err = parseLatest(out)
+		var last []Snapshot
+		last, r.Err = parseLast(out, 2)
+		if len(last) > 0 {
+			r.Latest = &last[0]
+		}
+		if len(last) > 1 {
+			r.Previous = &last[1]
+			r.Ecart = newEcart(last[0], last[1])
+		}
 	}
 	return r
 }
 
-// parseLatest lit le Dernier snapshot dans la sortie de `ls -tags`, triée du
-// plus récent au plus ancien. Une sortie vide signifie qu'il n'y a aucun
-// snapshot.
-func parseLatest(out string) (*Snapshot, error) {
+// parseLast lit les n premiers snapshots de la sortie de `ls -tags`, que
+// plakar trie du plus récent au plus ancien. Une sortie vide signifie qu'il
+// n'y a aucun snapshot.
+func parseLast(out string, n int) ([]Snapshot, error) {
+	var last []Snapshot
 	sc := bufio.NewScanner(strings.NewReader(out))
-	for sc.Scan() {
+	for len(last) < n && sc.Scan() {
 		if strings.TrimSpace(sc.Text()) == "" {
 			continue
 		}
@@ -71,9 +109,9 @@ func parseLatest(out string) (*Snapshot, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &s, nil
+		last = append(last, s)
 	}
-	return nil, sc.Err()
+	return last, sc.Err()
 }
 
 // lsLine découpe une ligne de `plakar ls -tags` (plakar v1.1.6) :
