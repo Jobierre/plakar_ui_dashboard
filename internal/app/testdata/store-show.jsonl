@@ -1,0 +1,5 @@
+{"arr":{"location":"http://unraid:9876","passphrase":"********"}}
+{"immich":{"location":"http://unraid:9877","passphrase":"********"}}
+{"vide":{"location":"http://unraid:9878","passphrase":"********"}}
+{"panne":{"location":"http://unraid:9879","passphrase":"********"}}
+{"petit":{"location":"/data/petit","passphrase":"********"}}

@@ -114,7 +114,7 @@ Un service léger, déployé en docker compose sur Unraid et accessible uniqueme
 - Pas de gestionnaire de secrets : les passphrases restent dans la config Plakar standard. Ce choix est assumé.
 
 ### Modules
-- **Catalogue** : liste des Stores, lue dans la config Plakar via `plakar store ls`, plus l'état propre au service pour chaque Store : Seuil de retard éventuel, port d'Exploration attribué, résultat du dernier Relevé. Il attribue un port au premier Store apparu (le premier libre de la plage) et le libère quand le Store disparaît. Il persiste l'état de façon atomique.
+- **Catalogue** : liste des Stores, lue dans la config Plakar via `plakar store show -json` (plakar v1.1.6 n'a pas de `store ls` ; le service ne garde que les noms, les secrets étant de toute façon masqués par plakar), triée par nom (plakar la rend dans un ordre aléatoire), plus l'état propre au service pour chaque Store : Seuil de retard éventuel, port d'Exploration attribué, résultat du dernier Relevé. Il attribue un port au premier Store apparu (le premier libre de la plage) et le libère quand le Store disparaît. Il persiste l'état de façon atomique.
 - **Relevé** : pour un Store, lance `plakar at @<store> ls -tags`, garde les deux premières lignes (Plakar trie du plus récent au plus ancien), produit le Dernier snapshot, le Snapshot précédent éventuel et l'Écart, ou une erreur (le Store est alors Injoignable). Un planificateur déclenche un Relevé par Store selon l'intervalle (1 h par défaut), au plus un Relevé à la fois par Store. Il est aussi déclenchable à la demande.
 - **État** : une fonction pure (Dernier snapshot, Seuil, maintenant, erreur du dernier Relevé) vers À jour, En retard ou Injoignable. Elle est calculée à l'affichage, avec l'horloge injectée, et n'est donc pas figée au moment du Relevé.
 - **Commande de Store** : découpe la ligne saisie en arguments, en gérant les guillemets simples et doubles et sans aucune expansion. Elle accepte uniquement `plakar store` suivi de `add | set | unset | rm | ls` (le préfixe `plakar` est facultatif) et exécute le binaire `plakar` directement, sans shell. Elle renvoie la sortie standard, la sortie d'erreur et le code de retour. Elle ne journalise ni ne stocke jamais la commande. Après une réussite, elle rafraîchit le Catalogue et lance un Relevé des nouveaux Stores.
@@ -174,8 +174,10 @@ Les champs sont : date RFC 3339 en UTC, ID court, taille (valeur + unité binair
   - Un Store **sans aucun snapshot** est affiché **En retard**, puisqu'il n'a pas de Dernier snapshot dans le Seuil.
   - Un Store **Injoignable** garde l'affichage de ses dernières valeurs connues, avec le message d'erreur.
 - **Sécurité :** la config Plakar du service contient les passphrases en clair. Elle doit être lisible seulement par le conteneur (droits `600`), et le volume `appdata` correspondant doit être traité comme sensible.
-- **Points restant à vérifier à l'implémentation :**
-  - le format exact de `plakar store ls` ;
-  - le format de taille pour les petites valeurs (B, KiB…) ;
-  - le comportement de `ls -tags` sur un Store sans tag.
+- **Points vérifiés à l'implémentation (ticket 01, plakar v1.1.6) :**
+  - `plakar store ls` n'existe pas (usage : `add|check|import|ping|rm|set|show|unset`). `plakar store show -json` émet une ligne `{"<nom>": {…}}` par Store, secrets remplacés par `********`, dans un ordre aléatoire. Impact sur la Commande de Store : voir le ticket 06.
+  - Tailles : `3 B`, `4.9 KiB`, `914 MiB`, `1.3 GiB` (valeur, espace, unité binaire). Durées au format Go (`21s`, `1m11s`, `12m38s`).
+  - Sans tag, le champ `tags=` est absent de la ligne ; plusieurs tags s'écrivent `tags=foo,bar`. Le chemin source peut contenir des espaces.
+  - Store vide : sortie vide, code 0. Store inconnu : `plakar: could not resolve repository: @<nom>` sur stderr, code 1.
+  - Observé une fois : sur une coupure réseau, `ls -tags` a rendu le code 0 avec `plakar: failed to read header … connection reset by peer` sur stdout. La lecture stricte des lignes en fait un Relevé en échec, et non un faux Dernier snapshot.
 - Les étapes manuelles de déploiement (clé Tailscale, préparation d'`appdata`, `plakar server` qui remplacent les Stores SFTP) pourront être guidées par `/wizard`.

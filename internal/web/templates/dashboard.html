@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>plakar-ui</title>
+</head>
+<body>
+<h1>Stores</h1>
+<table>
+<thead>
+<tr><th>Store</th><th>Dernier snapshot</th><th>Âge</th><th>ID</th><th>Taille</th><th>Durée</th><th>Source</th><th>Tags</th><th>Erreur</th></tr>
+</thead>
+<tbody>
+{{- range .}}
+<tr data-store="{{.Name}}"{{if .Pending}} data-pending{{end}}>
+<td data-field="name">{{.Name}}</td>
+{{- with .Latest}}
+<td data-field="date">{{.Date}}</td>
+<td data-field="age">{{.Age}}</td>
+<td data-field="id">{{.ID}}</td>
+<td data-field="size">{{.Size}}</td>
+<td data-field="duration">{{.Duration}}</td>
+<td data-field="path">{{.Path}}</td>
+<td data-field="tags">{{.Tags}}</td>
+{{- else}}
+<td data-field="latest" colspan="7">{{.Message}}</td>
+{{- end}}
+<td data-field="error">{{.Error}}</td>
+</tr>
+{{- end}}
+</tbody>
+</table>
+</body>
+</html>

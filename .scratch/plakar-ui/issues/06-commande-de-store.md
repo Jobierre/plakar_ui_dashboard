@@ -14,3 +14,7 @@
 - [ ] Ni la commande ni sa sortie ne sont journalisées ou persistées. Un test vérifie qu'une passphrase saisie n'apparaît ni dans les journaux ni dans le fichier d'état.
 - [ ] Après une commande réussie, le Catalogue est rafraîchi. Un Store ajouté apparaît et son Relevé est lancé immédiatement. Un Store retiré disparaît, ainsi que ses données dans le fichier d'état.
 - [ ] Le bloc n'est accessible qu'aux Utilisateurs autorisés.
+
+## Comments
+
+**2026-11-06, constat pendant le ticket 01 :** `plakar store ls` n'existe pas dans plakar v1.1.6 (sous-commandes réelles : `add|check|import|ping|rm|set|show|unset`). Il faut décider ce que la Commande de Store accepte à la place de `ls`. Par exemple, `ls` pourrait être traduit en `store show` sans `-secrets`, qui masque les secrets. Il faut aussi décider du sort de `check` et `ping`, absents de la liste. À trancher avec Jobierre avant d'implémenter.
