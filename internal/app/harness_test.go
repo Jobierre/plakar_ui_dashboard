@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -44,10 +45,11 @@ func TestMain(m *testing.M) {
 
 // response reprend le format lu par internal/fakeplakar.
 type response struct {
-	Args   []string `json:"args"`
-	Stdout string   `json:"stdout"`
-	Stderr string   `json:"stderr"`
-	Code   int      `json:"code"`
+	Args    []string `json:"args"`
+	Stdout  string   `json:"stdout"`
+	Stderr  string   `json:"stderr"`
+	Code    int      `json:"code"`
+	DelayMS int      `json:"delay_ms"`
 }
 
 // fakePlakar est un faux binaire plakar propre à un test.
@@ -149,6 +151,13 @@ func (c *clock) Now() time.Time {
 	return c.now
 }
 
+// advance fait passer le temps.
+func (c *clock) advance(d time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.now = c.now.Add(d)
+}
+
 // paris est le fuseau « heure locale » des tests.
 var paris = func() *time.Location {
 	loc, err := time.LoadLocation("Europe/Paris")
@@ -165,7 +174,8 @@ type service struct {
 }
 
 // startService démarre le service avec ces variables d'environnement. Le
-// chemin du faux plakar et une adresse libre sont fournis s'ils manquent.
+// chemin du faux plakar, une adresse libre et un fichier d'état propre au test
+// sont fournis s'ils manquent.
 func startService(t *testing.T, plakar *fakePlakar, clk *clock, env map[string]string) *service {
 	t.Helper()
 	return startServiceWith(t, plakar.path(), clk, env)
@@ -174,12 +184,24 @@ func startService(t *testing.T, plakar *fakePlakar, clk *clock, env map[string]s
 // startServiceWith démarre le service sur ce binaire plakar.
 func startServiceWith(t *testing.T, plakarBin string, clk *clock, env map[string]string) *service {
 	t.Helper()
+	if _, ok := env["PLAKAR_UI_STATE"]; !ok {
+		env = withEnv(env, "PLAKAR_UI_STATE", filepath.Join(t.TempDir(), "state.json"))
+	}
 	a, err := tryStartServiceWith(plakarBin, clk, env)
 	if err != nil {
 		t.Fatalf("démarrage du service : %v", err)
 	}
 	t.Cleanup(func() { a.Close() })
 	return &service{t: t, app: a}
+}
+
+// withEnv renvoie une copie de env complétée de k=v.
+func withEnv(env map[string]string, k, v string) map[string]string {
+	full := map[string]string{k: v}
+	for k, v := range env {
+		full[k] = v
+	}
+	return full
 }
 
 // tryStartService démarre le service et renvoie son erreur de démarrage.
@@ -217,6 +239,48 @@ func (s *service) get(path string) (int, string) {
 		s.t.Fatal(err)
 	}
 	return resp.StatusCode, string(body)
+}
+
+// setSeuil envoie le formulaire de Seuil de retard d'un Store, comme le ferait
+// le navigateur, et renvoie le code et la page obtenus.
+func (s *service) setSeuil(store, seuil string) (int, string) {
+	s.t.Helper()
+	resp, err := http.PostForm(s.app.URL()+"/stores/"+url.PathEscape(store)+"/seuil", url.Values{"seuil": {seuil}})
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	return resp.StatusCode, string(body)
+}
+
+// waitRow relit le tableau de bord jusqu'à ce que la ligne du Store vérifie
+// ready, et la renvoie.
+func (s *service) waitRow(store string, ready func(row) bool) row {
+	s.t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		_, body := s.get("/")
+		_, rows, _ := parseDashboard(s.t, body)
+		if r := rows[store]; r != nil && ready(r) {
+			return r
+		}
+		if time.Now().After(deadline) {
+			s.t.Fatalf("ligne %q jamais prête :\n%s", store, body)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// stop arrête le service, comme un arrêt du conteneur.
+func (s *service) stop() {
+	s.t.Helper()
+	if err := s.app.Close(); err != nil {
+		s.t.Fatal(err)
+	}
 }
 
 // row est le contenu affiché d'une ligne du tableau de bord : le texte de

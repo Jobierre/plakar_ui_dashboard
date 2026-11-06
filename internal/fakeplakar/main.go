@@ -4,6 +4,8 @@
 // enregistrées (arguments exacts → sortie standard, sortie d'erreur, code de
 // retour), rejoue celle qui correspond aux arguments reçus, et ajoute chaque
 // appel à $FAKE_PLAKAR_DIR/calls.jsonl (un tableau JSON d'arguments par ligne).
+// Une réponse peut se faire attendre (DelayMS) pour imiter un
+// Store lent.
 package main
 
 import (
@@ -12,14 +14,16 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"time"
 )
 
 // Response est une sortie enregistrée de plakar pour des arguments donnés.
 type Response struct {
-	Args   []string `json:"args"`
-	Stdout string   `json:"stdout"`
-	Stderr string   `json:"stderr"`
-	Code   int      `json:"code"`
+	Args    []string `json:"args"`
+	Stdout  string   `json:"stdout"`
+	Stderr  string   `json:"stderr"`
+	Code    int      `json:"code"`
+	DelayMS int      `json:"delay_ms"`
 }
 
 func main() {
@@ -43,6 +47,7 @@ func main() {
 	}
 	for _, r := range responses {
 		if slices.Equal(r.Args, args) {
+			time.Sleep(time.Duration(r.DelayMS) * time.Millisecond)
 			fmt.Fprint(os.Stdout, r.Stdout)
 			fmt.Fprint(os.Stderr, r.Stderr)
 			os.Exit(r.Code)

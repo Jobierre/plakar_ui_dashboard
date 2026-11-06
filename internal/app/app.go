@@ -62,7 +62,10 @@ func Start(ctx context.Context, opts Options) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("liste des Stores : %w", err)
 	}
-	cat := catalogue.New(names)
+	cat, err := catalogue.Open(cfg.StatePath, names)
+	if err != nil {
+		return nil, err
+	}
 
 	ln, err := net.Listen("tcp", cfg.Addr)
 	if err != nil {
@@ -70,8 +73,14 @@ func Start(ctx context.Context, opts Options) (*App, error) {
 	}
 	ctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	a := &App{
-		url:    "http://" + ln.Addr().String(),
-		server: &http.Server{Handler: web.Handler(cat, opts.Now, opts.Location, log)},
+		url: "http://" + ln.Addr().String(),
+		server: &http.Server{Handler: web.Handler(web.Dashboard{
+			Catalogue:    cat,
+			DefaultSeuil: cfg.DefaultSeuil,
+			Now:          opts.Now,
+			Location:     opts.Location,
+			Log:          log,
+		})},
 		cancel: cancel,
 	}
 	a.wg.Go(func() {
@@ -96,7 +105,9 @@ func Start(ctx context.Context, opts Options) (*App, error) {
 			if r.Err != nil {
 				log.Warn("Relevé en échec", "store", name, "err", r.Err)
 			}
-			cat.Record(name, r)
+			if err := cat.Record(name, r); err != nil {
+				log.Error("enregistrement du Relevé", "store", name, "err", err)
+			}
 		})
 	}
 	return a, nil

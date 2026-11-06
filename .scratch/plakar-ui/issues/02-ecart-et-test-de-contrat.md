@@ -10,7 +10,7 @@
 - [x] L'Écart de taille est affiché en pourcentage signé (par exemple « −97 % »), à côté de la taille.
 - [x] L'Écart de durée est affiché à côté de la durée.
 - [x] Un Store qui n'a qu'un seul snapshot n'affiche aucun Écart.
-- [ ] L'Écart n'a aucune influence sur l'État d'un Store.
+- [x] L'Écart n'a aucune influence sur l'État d'un Store. (Testé avec le ticket 03.)
 - [x] Le test de contrat crée un Kloset jetable dans un dossier temporaire, y fait deux backups d'un petit dossier en modifiant le contenu entre les deux, puis vérifie via le service le Dernier snapshot, le Snapshot précédent et l'Écart.
 - [x] Le test de contrat peut être sauté proprement quand `plakar` n'est pas installé, et il est clairement identifié comme tel.
 

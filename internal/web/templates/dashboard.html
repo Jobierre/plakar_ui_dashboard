@@ -8,12 +8,16 @@
 <h1>Stores</h1>
 <table>
 <thead>
-<tr><th>Store</th><th>Dernier snapshot</th><th>Âge</th><th>ID</th><th>Taille</th><th>Écart de taille</th><th>Durée</th><th>Écart de durée</th><th>Source</th><th>Tags</th><th>Erreur</th></tr>
+<tr><th>Store</th><th>État</th><th>Seuil de retard</th><th></th><th></th><th>Dernier snapshot</th><th>Âge</th><th>ID</th><th>Taille</th><th>Écart de taille</th><th>Durée</th><th>Écart de durée</th><th>Source</th><th>Tags</th><th>Erreur</th></tr>
 </thead>
 <tbody>
 {{- range .}}
 <tr data-store="{{.Name}}"{{if .Pending}} data-pending{{end}}>
 <td data-field="name">{{.Name}}</td>
+<td data-field="etat">{{.Etat}}</td>
+<td data-field="seuil">{{.Seuil}}</td>
+<td><form method="post" action="/stores/{{.Name}}/seuil"><input name="seuil" value="{{.SeuilInput}}" placeholder="par défaut" aria-label="Seuil de retard de {{.Name}}" size="6"> <button>Modifier</button></form></td>
+<td data-field="seuil-error">{{.SeuilError}}</td>
 {{- with .Latest}}
 <td data-field="date">{{.Date}}</td>
 <td data-field="age">{{.Age}}</td>
