@@ -51,6 +51,9 @@ type response struct {
 	Stderr  string   `json:"stderr"`
 	Code    int      `json:"code"`
 	DelayMS int      `json:"delay_ms"`
+	// Replace remplace, une fois cette réponse rejouée, les réponses aux mêmes
+	// arguments (chacune porte ses Args).
+	Replace []response `json:"replace,omitempty"`
 }
 
 // fakePlakar est un faux binaire plakar propre à un test.
@@ -223,6 +226,26 @@ var paris = func() *time.Location {
 type service struct {
 	t   *testing.T
 	app *app.App
+	// log reçoit les journaux du service.
+	log *syncBuffer
+}
+
+// syncBuffer est un tampon sûr pour un accès concurrent.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf strings.Builder
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }
 
 // startService démarre le service avec ces variables d'environnement. Le
@@ -239,12 +262,13 @@ func startServiceWith(t *testing.T, plakarBin string, clk *clock, env map[string
 	if _, ok := env["PLAKAR_UI_STATE"]; !ok {
 		env = withEnv(env, "PLAKAR_UI_STATE", filepath.Join(t.TempDir(), "state.json"))
 	}
-	a, err := tryStartServiceWith(plakarBin, clk, env)
+	log := &syncBuffer{}
+	a, err := startApp(plakarBin, clk, env, log)
 	if err != nil {
 		t.Fatalf("démarrage du service : %v", err)
 	}
 	t.Cleanup(func() { a.Close() })
-	return &service{t: t, app: a}
+	return &service{t: t, app: a, log: log}
 }
 
 // withEnv renvoie une copie de env complétée de k=v.
@@ -264,6 +288,11 @@ func tryStartService(plakar *fakePlakar, clk *clock, env map[string]string) (*ap
 // tryStartServiceWith démarre le service sur ce binaire plakar et renvoie son
 // erreur de démarrage.
 func tryStartServiceWith(plakarBin string, clk *clock, env map[string]string) (*app.App, error) {
+	return startApp(plakarBin, clk, env, io.Discard)
+}
+
+// startApp démarre le service sur ce binaire plakar, journaux vers log.
+func startApp(plakarBin string, clk *clock, env map[string]string, log io.Writer) (*app.App, error) {
 	full := map[string]string{
 		"PLAKAR_UI_ADDR":         "127.0.0.1:0",
 		"PLAKAR_UI_PLAKAR_BIN":   plakarBin,
@@ -277,7 +306,7 @@ func tryStartServiceWith(plakarBin string, clk *clock, env map[string]string) (*
 		Now:      clk.Now,
 		After:    clk.After,
 		Location: paris,
-		Log:      io.Discard,
+		Log:      log,
 	})
 }
 
@@ -461,4 +490,51 @@ func text(n *html.Node) string {
 	}
 	walk(n)
 	return strings.Join(strings.Fields(b.String()), " ")
+}
+
+// commande envoie une Commande de Store depuis son bloc, comme le ferait le
+// navigateur, et renvoie le code et la page obtenus.
+func (s *service) commande(line string) (int, string) {
+	s.t.Helper()
+	return s.postForm("/commande", url.Values{"commande": {line}})
+}
+
+// commandeBlock lit le résultat d'une Commande de Store dans la page : le
+// texte brut de chaque élément <… data-commande="…">.
+func commandeBlock(t *testing.T, body string) map[string]string {
+	t.Helper()
+	doc, err := html.Parse(strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	var walk func(n *html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.ElementNode {
+			if field, ok := attr(n, "data-commande"); ok {
+				got[field] = rawText(n)
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(doc)
+	return got
+}
+
+// rawText est le texte d'un nœud, blancs compris.
+func rawText(n *html.Node) string {
+	var b strings.Builder
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.TextNode {
+			b.WriteString(n.Data)
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(n)
+	return b.String()
 }

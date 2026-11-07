@@ -40,5 +40,28 @@
 {{- end}}
 </tbody>
 </table>
+<h2>Commande de Store</h2>
+<form method="post" action="/commande">
+<input name="commande" size="80" autocomplete="off" spellcheck="false" placeholder="plakar store add …" aria-label="Commande de Store">
+<button>Exécuter</button>
+</form>
+<p>Commandes acceptées : <code>plakar store add | set | unset | rm | show</code> (sans <code>-secrets</code>). La commande n'est jamais conservée.</p>
+{{- with .Commande}}
+<section id="commande-resultat">
+{{- with .Refus}}
+<p data-commande="refus">{{.}}</p>
+{{- end}}
+{{- with .Erreur}}
+<p data-commande="erreur">{{.}}</p>
+{{- end}}
+{{- with .Sortie}}
+<p>Code de retour : <span data-commande="code">{{.Code}}</span></p>
+<h3>Sortie standard</h3>
+<pre data-commande="stdout">{{.Stdout}}</pre>
+<h3>Sortie d'erreur</h3>
+<pre data-commande="stderr">{{.Stderr}}</pre>
+{{- end}}
+</section>
+{{- end}}
 </body>
 </html>

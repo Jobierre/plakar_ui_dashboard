@@ -15,6 +15,7 @@ import (
 
 	"plakar-ui/internal/acces"
 	"plakar-ui/internal/catalogue"
+	"plakar-ui/internal/commande"
 	"plakar-ui/internal/plakar"
 	"plakar-ui/internal/planificateur"
 	"plakar-ui/internal/web"
@@ -78,6 +79,16 @@ func Start(ctx context.Context, opts Options) (*App, error) {
 		After:      opts.After,
 		Log:        log,
 	}
+	executeur := &commande.Executeur{
+		Plakar: p,
+		Rafraichir: func(ctx context.Context) error {
+			names, err := p.Stores(ctx)
+			if err != nil {
+				return fmt.Errorf("liste des Stores : %w", err)
+			}
+			return plan.SetStores(names)
+		},
+	}
 	access := acces.Acces{Users: cfg.Users}
 	if cfg.Hote != "" {
 		access.Hosts = []string{cfg.Hote}
@@ -90,6 +101,7 @@ func Start(ctx context.Context, opts Options) (*App, error) {
 			Catalogue:    cat,
 			DefaultSeuil: cfg.DefaultSeuil,
 			Trigger:      plan.Trigger,
+			Commande:     executeur.Run,
 			Now:          opts.Now,
 			Location:     opts.Location,
 			Log:          log,

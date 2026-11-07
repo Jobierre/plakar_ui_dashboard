@@ -3,6 +3,7 @@ package web
 
 import (
 	"cmp"
+	"context"
 	"embed"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 
 	"plakar-ui/internal/acces"
 	"plakar-ui/internal/catalogue"
+	"plakar-ui/internal/commande"
 	"plakar-ui/internal/etat"
 	"plakar-ui/internal/releve"
 )
@@ -33,6 +35,8 @@ type Dashboard struct {
 	// Trigger lance un Relevé immédiat d'un Store (bouton ↻), sans en
 	// attendre la fin.
 	Trigger func(store string) error
+	// Commande exécute une Commande de Store saisie dans son bloc.
+	Commande func(ctx context.Context, line string) (*commande.Sortie, error)
 	// Now donne l'heure courante, Location le fuseau de l'heure affichée.
 	Now      func() time.Time
 	Location *time.Location
@@ -44,7 +48,7 @@ type Dashboard struct {
 func Handler(c Dashboard) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		c.render(w, r, http.StatusOK, nil)
+		c.render(w, r, http.StatusOK, view{})
 	})
 	mux.HandleFunc("POST /stores/{store}/seuil", func(w http.ResponseWriter, r *http.Request) {
 		name := r.PathValue("store")
@@ -53,7 +57,7 @@ func Handler(c Dashboard) http.Handler {
 		if text := r.FormValue("seuil"); strings.TrimSpace(text) != "" {
 			d, err := etat.ParseSeuil(text)
 			if err != nil {
-				c.render(w, r, http.StatusBadRequest, &seuilRefused{store: name, text: text, err: err.Error()})
+				c.render(w, r, http.StatusBadRequest, view{seuil: &seuilRefused{store: name, text: text, err: err.Error()}})
 				return
 			}
 			seuil = &d
@@ -63,7 +67,7 @@ func Handler(c Dashboard) http.Handler {
 				http.NotFound(w, r)
 				return
 			}
-			c.render(w, r, http.StatusInternalServerError, &seuilRefused{store: name, text: r.FormValue("seuil"), err: err.Error()})
+			c.render(w, r, http.StatusInternalServerError, view{seuil: &seuilRefused{store: name, text: r.FormValue("seuil"), err: err.Error()}})
 			return
 		}
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -80,6 +84,22 @@ func Handler(c Dashboard) http.Handler {
 		// La page montre alors le Relevé en cours.
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	})
+	mux.HandleFunc("POST /commande", func(w http.ResponseWriter, r *http.Request) {
+		// La ligne saisie n'est ni journalisée, ni renvoyée dans la page.
+		sortie, err := c.Commande(r.Context(), r.FormValue("commande"))
+		res := &commandeResult{Sortie: sortie}
+		status := http.StatusOK
+		var refus *commande.Refus
+		switch {
+		case errors.As(err, &refus):
+			res.Refus = refus.Error()
+			status = http.StatusBadRequest
+		case err != nil:
+			res.Erreur = err.Error()
+			status = http.StatusInternalServerError
+		}
+		c.render(w, r, status, view{commande: res})
+	})
 	// Les formulaires ne sont acceptés que depuis le tableau de bord lui-même,
 	// et non depuis une page tierce ouverte dans le même navigateur.
 	return http.NewCrossOriginProtection().Handler(mux)
@@ -91,24 +111,46 @@ type seuilRefused struct {
 	store, text, err string
 }
 
+// commandeResult est le résultat d'une Commande de Store, à afficher dans son
+// bloc : la sortie de plakar, ou le refus de la commande, ou l'erreur qui l'a
+// empêchée. Une Sortie peut s'accompagner d'une Erreur : la commande a réussi,
+// mais le tableau de bord n'a pas pu être mis à jour.
+type commandeResult struct {
+	Sortie        *commande.Sortie
+	Refus, Erreur string
+}
+
+// view est ce qu'une réponse ajoute au tableau de bord : un Seuil refusé, ou
+// le résultat d'une Commande de Store.
+type view struct {
+	seuil    *seuilRefused
+	commande *commandeResult
+}
+
 // render écrit le tableau de bord de l'Utilisateur autorisé de la requête,
-// avec le Seuil refusé éventuel.
-func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, refused *seuilRefused) {
+// avec ce que v y ajoute.
+func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, v view) {
 	now := c.Now()
 	rows := make([]row, 0)
 	for _, e := range c.Catalogue.Entries() {
 		line := c.newRow(e, now)
-		if refused != nil && refused.store == e.Name {
-			line.SeuilInput, line.SeuilError = refused.text, refused.err
+		if v.seuil != nil && v.seuil.store == e.Name {
+			line.SeuilInput, line.SeuilError = v.seuil.text, v.seuil.err
 		}
 		rows = append(rows, line)
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if v.commande != nil {
+		// La sortie d'une Commande de Store peut décrire un Store : elle ne
+		// doit pas rester dans le cache du navigateur.
+		w.Header().Set("Cache-Control", "no-store")
+	}
 	w.WriteHeader(status)
 	data := struct {
-		User string
-		Rows []row
-	}{User: acces.User(r.Context()), Rows: rows}
+		User     string
+		Rows     []row
+		Commande *commandeResult
+	}{User: acces.User(r.Context()), Rows: rows, Commande: v.commande}
 	if err := page.Execute(w, data); err != nil {
 		c.Log.Error("rendu du tableau de bord", "err", err)
 	}

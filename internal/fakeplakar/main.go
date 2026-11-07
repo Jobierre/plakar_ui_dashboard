@@ -7,7 +7,8 @@
 // et son PID à $FAKE_PLAKAR_DIR/pids, pour vérifier qu'aucun processus ne
 // reste actif.
 // Une réponse peut se faire attendre (DelayMS) pour imiter un
-// Store lent.
+// Store lent, et remplacer d'autres réponses une fois rejouée (Replace) pour
+// imiter une config plakar modifiée, par exemple par `store add`.
 package main
 
 import (
@@ -27,6 +28,9 @@ type Response struct {
 	Stderr  string   `json:"stderr"`
 	Code    int      `json:"code"`
 	DelayMS int      `json:"delay_ms"`
+	// Replace remplace, après cet appel, les réponses aux mêmes arguments, ou
+	// les ajoute.
+	Replace []Response `json:"replace,omitempty"`
 }
 
 func main() {
@@ -53,6 +57,11 @@ func main() {
 	}
 	for _, r := range responses {
 		if slices.Equal(r.Args, args) {
+			if len(r.Replace) > 0 {
+				if err := replace(dir, responses, r.Replace); err != nil {
+					fail("remplacement des réponses : %v", err)
+				}
+			}
 			time.Sleep(time.Duration(r.DelayMS) * time.Millisecond)
 			fmt.Fprint(os.Stdout, r.Stdout)
 			fmt.Fprint(os.Stderr, r.Stderr)
@@ -60,6 +69,32 @@ func main() {
 		}
 	}
 	fail("aucune réponse enregistrée pour %q", args)
+}
+
+// replace réécrit la table des réponses, où news remplacent les réponses aux
+// mêmes arguments. L'écriture est atomique : un appel simultané lit l'ancienne
+// table ou la nouvelle.
+func replace(dir string, responses, news []Response) error {
+	for _, n := range news {
+		responses = slices.DeleteFunc(responses, func(r Response) bool { return slices.Equal(r.Args, n.Args) })
+		responses = append(responses, n)
+	}
+	raw, err := json.Marshal(responses)
+	if err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".responses-*.json")
+	if err != nil {
+		return err
+	}
+	if _, err := tmp.Write(raw); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), filepath.Join(dir, "responses.json"))
 }
 
 func record(path string, args []string) error {
