@@ -18,6 +18,7 @@ func main() {
 	a, err := app.Start(ctx, app.Options{
 		Getenv:   os.Getenv,
 		Now:      time.Now,
+		After:    time.After,
 		Location: time.Local,
 		Log:      os.Stderr,
 	})

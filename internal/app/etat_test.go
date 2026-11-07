@@ -26,7 +26,8 @@ func TestStoreFallsBehindByTheMerePassingOfTimeWithoutANewReleve(t *testing.T) {
 	plakar.stores(`{"arr":{}}` + "\n")
 	plakar.ls("arr", response{Stdout: fixture(t, "ls-arr.txt")}) // 2026-11-06T11:00:05Z
 	clk := newClock("2026-11-06T17:00:05Z")
-	svc := startService(t, plakar, clk, nil)
+	// Aucun Relevé planifié ne tombe pendant le test.
+	svc := startService(t, plakar, clk, map[string]string{"PLAKAR_UI_INTERVALLE": "1000h"})
 	_, rows := svc.dashboard()
 	assertRow(t, rows["arr"], row{"etat": "À jour"})
 	calls := len(plakar.calls())

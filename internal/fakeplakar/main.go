@@ -3,7 +3,9 @@
 // Il lit dans $FAKE_PLAKAR_DIR/responses.json une table de réponses
 // enregistrées (arguments exacts → sortie standard, sortie d'erreur, code de
 // retour), rejoue celle qui correspond aux arguments reçus, et ajoute chaque
-// appel à $FAKE_PLAKAR_DIR/calls.jsonl (un tableau JSON d'arguments par ligne).
+// appel à $FAKE_PLAKAR_DIR/calls.jsonl (un tableau JSON d'arguments par ligne)
+// et son PID à $FAKE_PLAKAR_DIR/pids, pour vérifier qu'aucun processus ne
+// reste actif.
 // Une réponse peut se faire attendre (DelayMS) pour imiter un
 // Store lent.
 package main
@@ -14,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"time"
 )
 
@@ -35,6 +38,9 @@ func main() {
 
 	if err := record(filepath.Join(dir, "calls.jsonl"), args); err != nil {
 		fail("journal des appels : %v", err)
+	}
+	if err := appendLine(filepath.Join(dir, "pids"), []byte(strconv.Itoa(os.Getpid()))); err != nil {
+		fail("journal des PID : %v", err)
 	}
 
 	raw, err := os.ReadFile(filepath.Join(dir, "responses.json"))
@@ -61,6 +67,10 @@ func record(path string, args []string) error {
 	if err != nil {
 		return err
 	}
+	return appendLine(path, line)
+}
+
+func appendLine(path string, line []byte) error {
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err

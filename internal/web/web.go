@@ -29,14 +29,17 @@ type Dashboard struct {
 	// DefaultSeuil est le Seuil de retard des Stores qui n'en ont pas de
 	// propre.
 	DefaultSeuil time.Duration
+	// Trigger lance un Relevé immédiat d'un Store (bouton ↻), sans en
+	// attendre la fin.
+	Trigger func(store string) error
 	// Now donne l'heure courante, Location le fuseau de l'heure affichée.
 	Now      func() time.Time
 	Location *time.Location
 	Log      *slog.Logger
 }
 
-// Handler sert le tableau de bord des Stores du Catalogue et le changement
-// de Seuil de retard d'un Store.
+// Handler sert le tableau de bord des Stores du Catalogue, le changement de
+// Seuil de retard d'un Store et son Relevé à la demande.
 func Handler(c Dashboard) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
@@ -64,8 +67,20 @@ func Handler(c Dashboard) http.Handler {
 		}
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	})
-	// Le formulaire de Seuil n'est accepté que depuis le tableau de bord
-	// lui-même, et non depuis une page tierce ouverte dans le même navigateur.
+	mux.HandleFunc("POST /stores/{store}/releve", func(w http.ResponseWriter, r *http.Request) {
+		if err := c.Trigger(r.PathValue("store")); err != nil {
+			if errors.Is(err, catalogue.ErrUnknownStore) {
+				http.NotFound(w, r)
+				return
+			}
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		// La page montre alors le Relevé en cours.
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	})
+	// Les formulaires ne sont acceptés que depuis le tableau de bord lui-même,
+	// et non depuis une page tierce ouverte dans le même navigateur.
 	return http.NewCrossOriginProtection().Handler(mux)
 }
 
@@ -97,6 +112,10 @@ func (c Dashboard) render(w http.ResponseWriter, status int, refused *seuilRefus
 type row struct {
 	Name    string
 	Pending bool
+	// EnCours indique qu'un Relevé du Store est en cours ; ReleveAt est
+	// l'heure du dernier Relevé terminé, vide s'il n'y en a pas.
+	EnCours  bool
+	ReleveAt string
 	// Etat est vide tant qu'aucun Relevé n'est terminé.
 	Etat  string
 	Seuil string
@@ -110,6 +129,9 @@ type row struct {
 	Error string
 }
 
+// dateLayout est le format des dates affichées, en heure locale.
+const dateLayout = "2006-01-02 15:04"
+
 // snapshot est le Dernier snapshot d'une ligne, mis en forme, avec l'Écart
 // (vide sans Snapshot précédent).
 type snapshot struct {
@@ -121,7 +143,7 @@ type snapshot struct {
 
 func (c Dashboard) newRow(e catalogue.Entry, now time.Time) row {
 	seuil := c.DefaultSeuil
-	r := row{Name: e.Name, Seuil: etat.FormatSeuil(seuil) + " (par défaut)"}
+	r := row{Name: e.Name, EnCours: e.EnCours, Seuil: etat.FormatSeuil(seuil) + " (par défaut)"}
 	if e.Seuil != nil {
 		seuil = *e.Seuil
 		r.Seuil = etat.FormatSeuil(seuil)
@@ -129,10 +151,11 @@ func (c Dashboard) newRow(e catalogue.Entry, now time.Time) row {
 	}
 	if e.Releve != nil {
 		r.Etat = etat.Of(e.Releve.Latest, seuil, now, e.Releve.Err).String()
+		r.ReleveAt = e.Releve.At.In(c.Location).Format(dateLayout)
 	}
 	switch {
 	case e.Releve == nil:
-		r.Pending, r.Message = true, "Relevé en attente"
+		r.Pending, r.Message = true, "Aucun Relevé terminé"
 		return r
 	}
 	// Un Store Injoignable garde ses dernières valeurs connues, à côté de
@@ -150,7 +173,7 @@ func (c Dashboard) newRow(e catalogue.Entry, now time.Time) row {
 	}
 	s := e.Releve.Latest
 	r.Latest = &snapshot{
-		Date:     s.Date.In(c.Location).Format("2006-01-02 15:04"),
+		Date:     s.Date.In(c.Location).Format(dateLayout),
 		Age:      age(now.Sub(s.Date)),
 		ID:       s.ID,
 		Size:     s.Size.Text,

@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -122,6 +123,27 @@ func (f *fakePlakar) calls() [][]string {
 	return calls
 }
 
+// pids renvoie le PID de chaque processus plakar lancé.
+func (f *fakePlakar) pids() []int {
+	f.t.Helper()
+	raw, err := os.ReadFile(filepath.Join(f.dir, "pids"))
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	var pids []int
+	for _, line := range strings.Fields(string(raw)) {
+		pid, err := strconv.Atoi(line)
+		if err != nil {
+			f.t.Fatal(err)
+		}
+		pids = append(pids, pid)
+	}
+	return pids
+}
+
 func fixture(t *testing.T, name string) string {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join("testdata", name))
@@ -131,10 +153,18 @@ func fixture(t *testing.T, name string) string {
 	return string(raw)
 }
 
-// clock est une horloge réglable par le test.
+// clock est une horloge réglable par le test. Ses attentes (After) ne se
+// terminent que quand le test fait passer le temps.
 type clock struct {
-	mu  sync.Mutex
-	now time.Time
+	mu      sync.Mutex
+	now     time.Time
+	waiters []waiter
+}
+
+// waiter est une attente en cours sur l'horloge.
+type waiter struct {
+	at time.Time
+	ch chan time.Time
 }
 
 func newClock(rfc3339 string) *clock {
@@ -151,11 +181,33 @@ func (c *clock) Now() time.Time {
 	return c.now
 }
 
-// advance fait passer le temps.
+// After se termine quand l'horloge a avancé de d.
+func (c *clock) After(d time.Duration) <-chan time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	ch := make(chan time.Time, 1)
+	if d <= 0 {
+		ch <- c.now
+		return ch
+	}
+	c.waiters = append(c.waiters, waiter{at: c.now.Add(d), ch: ch})
+	return ch
+}
+
+// advance fait passer le temps, et termine les attentes échues.
 func (c *clock) advance(d time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.now = c.now.Add(d)
+	pending := c.waiters[:0]
+	for _, w := range c.waiters {
+		if w.at.After(c.now) {
+			pending = append(pending, w)
+			continue
+		}
+		w.ch <- c.now
+	}
+	c.waiters = pending
 }
 
 // paris est le fuseau « heure locale » des tests.
@@ -222,6 +274,7 @@ func tryStartServiceWith(plakarBin string, clk *clock, env map[string]string) (*
 	return app.Start(context.Background(), app.Options{
 		Getenv:   func(k string) string { return full[k] },
 		Now:      clk.Now,
+		After:    clk.After,
 		Location: paris,
 		Log:      io.Discard,
 	})
@@ -245,7 +298,21 @@ func (s *service) get(path string) (int, string) {
 // le navigateur, et renvoie le code et la page obtenus.
 func (s *service) setSeuil(store, seuil string) (int, string) {
 	s.t.Helper()
-	resp, err := http.PostForm(s.app.URL()+"/stores/"+url.PathEscape(store)+"/seuil", url.Values{"seuil": {seuil}})
+	return s.postForm("/stores/"+url.PathEscape(store)+"/seuil", url.Values{"seuil": {seuil}})
+}
+
+// releve appuie sur le bouton ↻ d'un Store, comme le ferait le navigateur, et
+// renvoie le code et la page obtenus.
+func (s *service) releve(store string) (int, string) {
+	s.t.Helper()
+	return s.postForm("/stores/"+url.PathEscape(store)+"/releve", nil)
+}
+
+// postForm envoie un formulaire et renvoie le code et la page obtenus, après
+// redirection.
+func (s *service) postForm(path string, values url.Values) (int, string) {
+	s.t.Helper()
+	resp, err := http.PostForm(s.app.URL()+path, values)
 	if err != nil {
 		s.t.Fatal(err)
 	}

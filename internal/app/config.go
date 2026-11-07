@@ -23,6 +23,9 @@ type Config struct {
 	// StatePath est le fichier d'état, qui garde les Seuils et le dernier
 	// Relevé de chaque Store (PLAKAR_UI_STATE).
 	StatePath string
+	// Intervalle sépare deux Relevés planifiés d'un même Store
+	// (PLAKAR_UI_INTERVALLE, 1h par défaut).
+	Intervalle time.Duration
 }
 
 func loadConfig(getenv func(string) string) (Config, error) {
@@ -36,6 +39,14 @@ func loadConfig(getenv func(string) string) (Config, error) {
 		return c, fmt.Errorf("PLAKAR_UI_SEUIL : %w", err)
 	}
 	c.DefaultSeuil = seuil
+	text := orDefault(getenv("PLAKAR_UI_INTERVALLE"), "1h")
+	c.Intervalle, err = time.ParseDuration(text)
+	if err != nil {
+		return c, fmt.Errorf("PLAKAR_UI_INTERVALLE : %w", err)
+	}
+	if c.Intervalle <= 0 {
+		return c, fmt.Errorf("PLAKAR_UI_INTERVALLE %q : une durée positive est attendue, par exemple 1h ou 30m", text)
+	}
 	host, _, err := net.SplitHostPort(c.Addr)
 	if err != nil {
 		return c, fmt.Errorf("PLAKAR_UI_ADDR %q : %w", c.Addr, err)

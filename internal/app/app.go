@@ -15,16 +15,8 @@ import (
 
 	"plakar-ui/internal/catalogue"
 	"plakar-ui/internal/plakar"
-	"plakar-ui/internal/releve"
+	"plakar-ui/internal/planificateur"
 	"plakar-ui/internal/web"
-)
-
-const (
-	// releveTimeout borne la durée d'un Relevé : un Store qui ne répond pas
-	// devient Injoignable au lieu de bloquer sa ligne.
-	releveTimeout = 10 * time.Minute
-	// releveParallelism limite le nombre de Relevés simultanés.
-	releveParallelism = 4
 )
 
 // Options sont les dépendances injectées dans le service.
@@ -33,6 +25,9 @@ type Options struct {
 	Getenv func(string) string
 	// Now donne l'heure courante (time.Now en production).
 	Now func() time.Time
+	// After attend que l'horloge ait avancé d'une durée (time.After en
+	// production).
+	After func(time.Duration) <-chan time.Time
 	// Location est le fuseau de l'heure locale affichée (time.Local en
 	// production).
 	Location *time.Location
@@ -46,10 +41,12 @@ type App struct {
 	server *http.Server
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
+	plan   *planificateur.Planificateur
 }
 
 // Start lit la configuration, charge le Catalogue depuis la config plakar,
-// sert le tableau de bord et lance un Relevé de chaque Store.
+// sert le tableau de bord et planifie les Relevés de chaque Store : un tout de
+// suite, puis un à chaque intervalle.
 func Start(ctx context.Context, opts Options) (*App, error) {
 	log := slog.New(slog.NewTextHandler(opts.Log, nil))
 	cfg, err := loadConfig(opts.Getenv)
@@ -72,17 +69,30 @@ func Start(ctx context.Context, opts Options) (*App, error) {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	plan := &planificateur.Planificateur{
+		Plakar:     p,
+		Catalogue:  cat,
+		Intervalle: cfg.Intervalle,
+		Now:        opts.Now,
+		After:      opts.After,
+		Log:        log,
+	}
 	a := &App{
 		url: "http://" + ln.Addr().String(),
 		server: &http.Server{Handler: web.Handler(web.Dashboard{
 			Catalogue:    cat,
 			DefaultSeuil: cfg.DefaultSeuil,
+			Trigger:      plan.Trigger,
 			Now:          opts.Now,
 			Location:     opts.Location,
 			Log:          log,
 		})},
 		cancel: cancel,
+		plan:   plan,
 	}
+	// La planification démarre avant le serveur : un ↻ trouve toujours le
+	// Planificateur prêt.
+	plan.Start(ctx, names)
 	a.wg.Go(func() {
 		if err := a.server.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
 			log.Error("serveur HTTP", "err", err)
@@ -90,26 +100,6 @@ func Start(ctx context.Context, opts Options) (*App, error) {
 	})
 	log.Info("tableau de bord servi", "url", a.url, "stores", len(names))
 
-	sem := make(chan struct{}, releveParallelism)
-	for _, name := range names {
-		a.wg.Go(func() {
-			select {
-			case sem <- struct{}{}:
-			case <-ctx.Done():
-				return
-			}
-			defer func() { <-sem }()
-			rctx, done := context.WithTimeout(ctx, releveTimeout)
-			defer done()
-			r := releve.Run(rctx, p, name, opts.Now)
-			if r.Err != nil {
-				log.Warn("Relevé en échec", "store", name, "err", r.Err)
-			}
-			if err := cat.Record(name, r); err != nil {
-				log.Error("enregistrement du Relevé", "store", name, "err", err)
-			}
-		})
-	}
 	return a, nil
 }
 
@@ -121,5 +111,6 @@ func (a *App) Close() error {
 	a.cancel()
 	err := a.server.Close()
 	a.wg.Wait()
+	a.plan.Wait()
 	return err
 }

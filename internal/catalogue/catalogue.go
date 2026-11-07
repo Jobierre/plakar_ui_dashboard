@@ -20,6 +20,10 @@ type Catalogue struct {
 	names   []string
 	results map[string]releve.Result
 	seuils  map[string]time.Duration
+	// enCours sont les Stores dont un Relevé est commencé et pas encore
+	// enregistré. Il n'est pas conservé : un Relevé ne survit pas à un
+	// redémarrage.
+	enCours map[string]bool
 }
 
 // Entry est un Store, le résultat de son dernier Relevé et son Seuil.
@@ -30,6 +34,9 @@ type Entry struct {
 	// Seuil est le Seuil de retard propre au Store, nil s'il suit le Seuil
 	// par défaut.
 	Seuil *time.Duration
+	// EnCours indique qu'un Relevé du Store est commencé et pas encore
+	// terminé.
+	EnCours bool
 }
 
 // ErrUnknownStore signale un Store absent du Catalogue.
@@ -40,25 +47,49 @@ var ErrUnknownStore = errors.New("Store inconnu")
 // est un état vide ; un fichier illisible est une erreur, pour ne jamais
 // écraser des Seuils qu'on n'a pas su lire.
 func Open(path string, names []string) (*Catalogue, error) {
-	c := &Catalogue{path: path, names: names, results: map[string]releve.Result{}, seuils: map[string]time.Duration{}}
+	c := &Catalogue{path: path, names: names, results: map[string]releve.Result{}, seuils: map[string]time.Duration{}, enCours: map[string]bool{}}
 	if err := c.load(); err != nil {
 		return nil, fmt.Errorf("fichier d'état %s : %w", path, err)
 	}
 	return c, nil
 }
 
-// Record garde le résultat du dernier Relevé d'un Store et l'enregistre. Un
-// Relevé en échec garde les dernières valeurs connues du Store, à côté de
-// l'erreur. L'erreur renvoyée est celle de l'enregistrement : le résultat
-// reste affiché.
+// Begin marque le début d'un Relevé du Store. Il renvoie false si un Relevé
+// de ce Store est déjà en cours : deux Relevés d'un même Store ne se
+// chevauchent jamais. Le Relevé se termine par Record.
+func (c *Catalogue) Begin(name string) (bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !slices.Contains(c.names, name) {
+		return false, ErrUnknownStore
+	}
+	if c.enCours[name] {
+		return false, nil
+	}
+	c.enCours[name] = true
+	return true, nil
+}
+
+// Record termine le Relevé en cours d'un Store, garde son résultat et
+// l'enregistre. Un Relevé en échec garde les dernières valeurs connues du
+// Store, à côté de l'erreur. L'erreur renvoyée est celle de l'enregistrement :
+// le résultat reste affiché.
 func (c *Catalogue) Record(name string, r releve.Result) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if prev, ok := c.results[name]; ok && r.Err != nil {
 		r.Latest, r.Previous, r.Ecart = prev.Latest, prev.Previous, prev.Ecart
 	}
+	delete(c.enCours, name)
 	c.results[name] = r
 	return c.save()
+}
+
+// Abandon termine le Relevé en cours d'un Store sans en garder de résultat.
+func (c *Catalogue) Abandon(name string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.enCours, name)
 }
 
 // SetSeuil donne au Store un Seuil de retard propre, ou lui rend le Seuil par
@@ -93,7 +124,7 @@ func (c *Catalogue) Entries() []Entry {
 	defer c.mu.Unlock()
 	entries := make([]Entry, len(c.names))
 	for i, name := range c.names {
-		entries[i] = Entry{Name: name}
+		entries[i] = Entry{Name: name, EnCours: c.enCours[name]}
 		if r, ok := c.results[name]; ok {
 			entries[i].Releve = &r
 		}
