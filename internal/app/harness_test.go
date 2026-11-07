@@ -10,6 +10,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand/v2"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -54,6 +56,9 @@ type response struct {
 	// Replace remplace, une fois cette réponse rejouée, les réponses aux mêmes
 	// arguments (chacune porte ses Args).
 	Replace []response `json:"replace,omitempty"`
+	// Serve imite `plakar ui` sur l'adresse de -addr, avec ce jeton.
+	Serve bool   `json:"serve,omitempty"`
+	Token string `json:"token,omitempty"`
 }
 
 // fakePlakar est un faux binaire plakar propre à un test.
@@ -82,6 +87,47 @@ func (f *fakePlakar) stores(jsonl string) {
 // ls enregistre la sortie de `plakar at @<store> ls -tags`.
 func (f *fakePlakar) ls(store string, r response) {
 	f.on([]string{"at", "@" + store, "ls", "-tags"}, r)
+}
+
+// ui fait imiter `plakar at @<store> ui` au faux plakar, sur le port interne
+// qui correspond à ce port public (décalage par défaut de 100), avec ce jeton.
+func (f *fakePlakar) ui(store string, port int, token string) {
+	internal := fmt.Sprintf("127.0.0.1:%d", port+100)
+	f.on(uiArgs(store, port), response{
+		Serve:  true,
+		Token:  token,
+		Stdout: "launching webUI at http://" + internal + "?plakar_token=" + token + "\n",
+	})
+}
+
+// uiArgs sont les arguments de `plakar ui` pour le Store et son port public.
+func uiArgs(store string, port int) []string {
+	return []string{"at", "@" + store, "ui", "-no-spawn", "-addr", fmt.Sprintf("127.0.0.1:%d", port+100)}
+}
+
+// freePorts renvoie le début d'une plage de n ports libres, dont les ports
+// internes (décalés de 100) sont libres aussi.
+func freePorts(n int) int {
+	for try := 0; try < 50; try++ {
+		base := 20000 + rand.IntN(30000)
+		if portsFree(base, n) {
+			return base
+		}
+	}
+	panic("aucune plage de ports libre")
+}
+
+func portsFree(base, n int) bool {
+	for p := base; p < base+n; p++ {
+		for _, port := range []int{p, p + 100} {
+			ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+			if err != nil {
+				return false
+			}
+			ln.Close()
+		}
+	}
+	return true
 }
 
 // path écrit la table des réponses et renvoie le chemin d'un exécutable qui
@@ -293,8 +339,11 @@ func tryStartServiceWith(plakarBin string, clk *clock, env map[string]string) (*
 
 // startApp démarre le service sur ce binaire plakar, journaux vers log.
 func startApp(plakarBin string, clk *clock, env map[string]string, log io.Writer) (*app.App, error) {
+	base := freePorts(3)
 	full := map[string]string{
-		"PLAKAR_UI_ADDR":         "127.0.0.1:0",
+		"PLAKAR_UI_ADDR": "127.0.0.1:0",
+		// Une plage libre propre au test, plutôt que la plage par défaut.
+		"PLAKAR_UI_PORTS":        fmt.Sprintf("%d-%d", base, base+2),
 		"PLAKAR_UI_PLAKAR_BIN":   plakarBin,
 		"PLAKAR_UI_UTILISATEURS": testUser,
 	}
@@ -537,4 +586,29 @@ func rawText(n *html.Node) string {
 	}
 	walk(n)
 	return b.String()
+}
+
+// explorer appuie sur le bouton « Explorer » d'un Store, et renvoie le code et
+// la page obtenus.
+func (s *service) explorer(store string) (int, string) {
+	s.t.Helper()
+	return s.postForm("/stores/"+url.PathEscape(store)+"/exploration", nil)
+}
+
+// arreterExploration appuie sur le bouton « Arrêter » de l'Exploration d'un
+// Store.
+func (s *service) arreterExploration(store string) (int, string) {
+	s.t.Helper()
+	return s.postForm("/stores/"+url.PathEscape(store)+"/exploration/arret", nil)
+}
+
+// getPort envoie GET sur un port public d'Exploration, avec cette identité, et
+// renvoie le code et le corps obtenus.
+func (s *service) getPort(port int, path, user string) (int, string) {
+	s.t.Helper()
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d%s", port, path), nil)
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	return s.do(req, user)
 }

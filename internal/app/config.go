@@ -4,9 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
+	"plakar-ui/internal/catalogue"
 	"plakar-ui/internal/etat"
 )
 
@@ -35,6 +37,15 @@ type Config struct {
 	// plakar-ui.<tailnet>.ts.net (PLAKAR_UI_HOTE). Les requêtes adressées à
 	// un autre nom que lui ou localhost sont refusées.
 	Hote string
+	// Ports est la plage des ports publics d'Exploration (PLAKAR_UI_PORTS,
+	// 9300-9320 par défaut). Le service écoute sur chacun, en localhost.
+	Ports catalogue.Plage
+	// Decalage sépare le port public d'un Store du port interne de son
+	// `plakar ui` (PLAKAR_UI_DECALAGE, 100 par défaut).
+	Decalage int
+	// Inactivite est la durée sans trafic après laquelle une Exploration est
+	// arrêtée (PLAKAR_UI_INACTIVITE, 15m par défaut).
+	Inactivite time.Duration
 }
 
 func loadConfig(getenv func(string) string) (Config, error) {
@@ -69,6 +80,21 @@ func loadConfig(getenv func(string) string) (Config, error) {
 	}
 	if c.Intervalle <= 0 {
 		return c, fmt.Errorf("PLAKAR_UI_INTERVALLE %q : une durée positive est attendue, par exemple 1h ou 30m", text)
+	}
+	if c.Ports, err = catalogue.ParsePlage(orDefault(getenv("PLAKAR_UI_PORTS"), "9300-9320")); err != nil {
+		return c, fmt.Errorf("PLAKAR_UI_PORTS : %w", err)
+	}
+	text = orDefault(getenv("PLAKAR_UI_DECALAGE"), "100")
+	c.Decalage, err = strconv.Atoi(text)
+	// Les ports internes ne doivent recouper ni la plage publique, ni sortir
+	// des ports possibles.
+	if err != nil || c.Decalage <= c.Ports.Fin-c.Ports.Debut || c.Ports.Fin+c.Decalage > 65535 {
+		return c, fmt.Errorf("PLAKAR_UI_DECALAGE %q : un entier supérieur à la largeur de la plage PLAKAR_UI_PORTS (%d), qui garde les ports internes sous 65536, est attendu, par exemple 100", text, c.Ports.Fin-c.Ports.Debut)
+	}
+	text = orDefault(getenv("PLAKAR_UI_INACTIVITE"), "15m")
+	c.Inactivite, err = time.ParseDuration(text)
+	if err != nil || c.Inactivite <= 0 {
+		return c, fmt.Errorf("PLAKAR_UI_INACTIVITE %q : une durée positive est attendue, par exemple 15m", text)
 	}
 	host, _, err := net.SplitHostPort(c.Addr)
 	if err != nil {

@@ -35,12 +35,26 @@ type Dashboard struct {
 	// Trigger lance un Relevé immédiat d'un Store (bouton ↻), sans en
 	// attendre la fin.
 	Trigger func(store string) error
+	// Explorations lance, donne et arrête les Explorations des Stores.
+	Explorations Explorations
 	// Commande exécute une Commande de Store saisie dans son bloc.
 	Commande func(ctx context.Context, line string) (*commande.Sortie, error)
 	// Now donne l'heure courante, Location le fuseau de l'heure affichée.
 	Now      func() time.Time
 	Location *time.Location
 	Log      *slog.Logger
+}
+
+// Explorations sont les Explorations des Stores.
+type Explorations interface {
+	// Lancer lance l'Exploration du Store sur son port public, ou retrouve
+	// celle en cours, et renvoie son lien.
+	Lancer(store string, port int) (string, error)
+	// Lien est le lien de l'Exploration en cours du Store, vide sans
+	// Exploration.
+	Lien(store string) string
+	// Arreter arrête l'Exploration du Store, s'il y en a une.
+	Arreter(store string)
 }
 
 // Handler sert le tableau de bord des Stores du Catalogue, le changement de
@@ -84,6 +98,28 @@ func Handler(c Dashboard) http.Handler {
 		// La page montre alors le Relevé en cours.
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	})
+	mux.HandleFunc("POST /stores/{store}/exploration", func(w http.ResponseWriter, r *http.Request) {
+		name := r.PathValue("store")
+		e, ok := c.Catalogue.Entry(name)
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		if e.Port == 0 {
+			c.render(w, r, http.StatusConflict, view{exploration: &explorationRefused{store: name, err: plageEpuisee}})
+			return
+		}
+		if _, err := c.Explorations.Lancer(name, e.Port); err != nil {
+			c.render(w, r, http.StatusBadGateway, view{exploration: &explorationRefused{store: name, err: err.Error()}})
+			return
+		}
+		// La page montre alors le lien de l'Exploration.
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	})
+	mux.HandleFunc("POST /stores/{store}/exploration/arret", func(w http.ResponseWriter, r *http.Request) {
+		c.Explorations.Arreter(r.PathValue("store"))
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	})
 	mux.HandleFunc("POST /commande", func(w http.ResponseWriter, r *http.Request) {
 		// La ligne saisie n'est ni journalisée, ni renvoyée dans la page.
 		sortie, err := c.Commande(r.Context(), r.FormValue("commande"))
@@ -120,11 +156,21 @@ type commandeResult struct {
 	Refus, Erreur string
 }
 
-// view est ce qu'une réponse ajoute au tableau de bord : un Seuil refusé, ou
-// le résultat d'une Commande de Store.
+// plageEpuisee remplace le bouton « Explorer » d'un Store sans port.
+const plageEpuisee = "Plage de ports d'Exploration épuisée : agrandissez PLAKAR_UI_PORTS."
+
+// explorationRefused est l'échec du lancement d'une Exploration, à signaler
+// sur la ligne de son Store.
+type explorationRefused struct {
+	store, err string
+}
+
+// view est ce qu'une réponse ajoute au tableau de bord : un Seuil refusé, un
+// lancement d'Exploration en échec, ou le résultat d'une Commande de Store.
 type view struct {
-	seuil    *seuilRefused
-	commande *commandeResult
+	seuil       *seuilRefused
+	exploration *explorationRefused
+	commande    *commandeResult
 }
 
 // render écrit le tableau de bord de l'Utilisateur autorisé de la requête,
@@ -137,14 +183,15 @@ func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, v 
 		if v.seuil != nil && v.seuil.store == e.Name {
 			line.SeuilInput, line.SeuilError = v.seuil.text, v.seuil.err
 		}
+		if v.exploration != nil && v.exploration.store == e.Name {
+			line.ExplorationError = v.exploration.err
+		}
 		rows = append(rows, line)
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if v.commande != nil {
-		// La sortie d'une Commande de Store peut décrire un Store : elle ne
-		// doit pas rester dans le cache du navigateur.
-		w.Header().Set("Cache-Control", "no-store")
-	}
+	// La page porte les jetons des Explorations en cours, et la sortie d'une
+	// Commande de Store : rien ne doit en rester dans le cache du navigateur.
+	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
 	data := struct {
 		User     string
@@ -175,6 +222,10 @@ type row struct {
 	Message string
 	// Error est le message d'erreur du dernier Relevé, s'il a échoué.
 	Error string
+	// Exploration est le lien de l'Exploration en cours, vide sans
+	// Exploration ; PortMessage remplace le bouton « Explorer » d'un Store
+	// sans port ; ExplorationError explique l'échec d'un lancement.
+	Exploration, PortMessage, ExplorationError string
 }
 
 // dateLayout est le format des dates affichées, en heure locale.
@@ -191,7 +242,10 @@ type snapshot struct {
 
 func (c Dashboard) newRow(e catalogue.Entry, now time.Time) row {
 	seuil := c.DefaultSeuil
-	r := row{Name: e.Name, EnCours: e.EnCours, Seuil: etat.FormatSeuil(seuil) + " (par défaut)"}
+	r := row{Name: e.Name, EnCours: e.EnCours, Seuil: etat.FormatSeuil(seuil) + " (par défaut)", Exploration: c.Explorations.Lien(e.Name)}
+	if e.Port == 0 {
+		r.PortMessage = plageEpuisee
+	}
 	if e.Seuil != nil {
 		seuil = *e.Seuil
 		r.Seuil = etat.FormatSeuil(seuil)

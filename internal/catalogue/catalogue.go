@@ -21,6 +21,10 @@ type Catalogue struct {
 	names   []string
 	results map[string]releve.Result
 	seuils  map[string]time.Duration
+	// plage est la plage des ports d'Exploration, ports le port attribué à
+	// chaque Store qui en a un.
+	plage Plage
+	ports map[string]int
 	// enCours donne, pour chaque Store dont un Relevé est commencé et pas
 	// encore enregistré, le jeton de ce Relevé. Il n'est pas conservé : un
 	// Relevé ne survit pas à un redémarrage.
@@ -45,21 +49,59 @@ type Entry struct {
 	// EnCours indique qu'un Relevé du Store est commencé et pas encore
 	// terminé.
 	EnCours bool
+	// Port est le port d'Exploration du Store, 0 si la plage est épuisée.
+	Port int
 }
 
 // ErrUnknownStore signale un Store absent du Catalogue.
 var ErrUnknownStore = errors.New("Store inconnu")
 
 // Open crée le Catalogue de ces Stores, dans cet ordre, et reprend dans le
-// fichier d'état path leurs Seuils et leur dernier Relevé. Un fichier absent
-// est un état vide ; un fichier illisible est une erreur, pour ne jamais
-// écraser des Seuils qu'on n'a pas su lire.
-func Open(path string, names []string) (*Catalogue, error) {
-	c := &Catalogue{path: path, names: names, results: map[string]releve.Result{}, seuils: map[string]time.Duration{}, enCours: map[string]Jeton{}}
+// fichier d'état path leurs Seuils, leur dernier Relevé et leur port
+// d'Exploration. Un fichier absent est un état vide ; un fichier illisible est
+// une erreur, pour ne jamais écraser des Seuils qu'on n'a pas su lire. Chaque
+// Store sans port en reçoit un de la plage, et l'état est enregistré.
+func Open(path string, names []string, plage Plage) (*Catalogue, error) {
+	c := &Catalogue{path: path, names: names, results: map[string]releve.Result{}, seuils: map[string]time.Duration{}, enCours: map[string]Jeton{}, plage: plage, ports: map[string]int{}}
 	if err := c.load(); err != nil {
 		return nil, fmt.Errorf("fichier d'état %s : %w", path, err)
 	}
+	if c.assignPorts() {
+		if err := c.save(); err != nil {
+			return nil, fmt.Errorf("fichier d'état %s : %w", path, err)
+		}
+	}
 	return c, nil
+}
+
+// assignPorts donne à chaque Store sans port, dans l'ordre des Stores, le
+// premier port libre de la plage. Un port hors de la plage (la plage a changé)
+// ou déjà pris par un Store précédent est rendu. Il dit si un port a changé.
+// Il faut tenir c.mu.
+func (c *Catalogue) assignPorts() bool {
+	changed := false
+	used := map[int]bool{}
+	for _, name := range c.names {
+		port, ok := c.ports[name]
+		if !ok {
+			continue
+		}
+		if !c.plage.Contains(port) || used[port] {
+			delete(c.ports, name)
+			changed = true
+			continue
+		}
+		used[port] = true
+	}
+	free := slices.DeleteFunc(c.plage.Ports(), func(p int) bool { return used[p] })
+	for _, name := range c.names {
+		if _, ok := c.ports[name]; ok || len(free) == 0 {
+			continue
+		}
+		c.ports[name], free = free[0], free[1:]
+		changed = true
+	}
+	return changed
 }
 
 // Begin marque le début d'un Relevé du Store et renvoie son jeton. Il renvoie
@@ -99,9 +141,9 @@ func (c *Catalogue) Record(name string, j Jeton, r releve.Result) error {
 }
 
 // SetStores remplace la liste des Stores par celle-ci, lue dans la config
-// plakar, dans cet ordre. Un Store retiré perd son Seuil et son dernier
-// Relevé, qui disparaissent du fichier d'état ; un Store ajouté n'a encore
-// aucun Relevé. La liste est changée même si l'enregistrement échoue : la
+// plakar, dans cet ordre. Un Store retiré perd son Seuil, son dernier Relevé
+// et son port, qui disparaissent du fichier d'état ; un Store ajouté n'a
+// encore aucun Relevé, et reçoit un port. La liste est changée même si l'enregistrement échoue : la
 // config plakar fait foi, et le fichier d'état sera repris à l'enregistrement
 // suivant.
 func (c *Catalogue) SetStores(names []string) error {
@@ -111,6 +153,9 @@ func (c *Catalogue) SetStores(names []string) error {
 	removed := func(name string) bool { return !slices.Contains(names, name) }
 	maps.DeleteFunc(c.results, func(name string, _ releve.Result) bool { return removed(name) })
 	maps.DeleteFunc(c.seuils, func(name string, _ time.Duration) bool { return removed(name) })
+	// Le port d'un Store retiré est libéré, et peut servir à un Store ajouté.
+	maps.DeleteFunc(c.ports, func(name string, _ int) bool { return removed(name) })
+	c.assignPorts()
 	// Le Relevé en cours d'un Store retiré ne compte plus : s'il revient,
 	// sous une autre config peut-être, son premier Relevé est un nouveau.
 	maps.DeleteFunc(c.enCours, func(name string, _ Jeton) bool { return removed(name) })
@@ -152,6 +197,16 @@ func (c *Catalogue) SetSeuil(name string, seuil *time.Duration) error {
 	return nil
 }
 
+// Entry renvoie le Store qui porte ce nom, et son dernier Relevé.
+func (c *Catalogue) Entry(name string) (Entry, bool) {
+	for _, e := range c.Entries() {
+		if e.Name == name {
+			return e, true
+		}
+	}
+	return Entry{}, false
+}
+
 // Entries renvoie les Stores et leur dernier Relevé, dans l'ordre.
 func (c *Catalogue) Entries() []Entry {
 	c.mu.Lock()
@@ -159,7 +214,7 @@ func (c *Catalogue) Entries() []Entry {
 	entries := make([]Entry, len(c.names))
 	for i, name := range c.names {
 		_, enCours := c.enCours[name]
-		entries[i] = Entry{Name: name, EnCours: enCours}
+		entries[i] = Entry{Name: name, EnCours: enCours, Port: c.ports[name]}
 		if r, ok := c.results[name]; ok {
 			entries[i].Releve = &r
 		}

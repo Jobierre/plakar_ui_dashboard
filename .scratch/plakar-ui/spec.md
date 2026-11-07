@@ -137,6 +137,7 @@ Les champs sont : date RFC 3339 en UTC, ID court, taille (valeur + unité binair
 - L'intervalle de Relevé (1 h).
 - L'inactivité d'Exploration (15 min).
 - La plage de ports d'Exploration (9300-9320).
+- Le décalage entre le port public d'un Store et le port interne de son `plakar ui` (100).
 - Le chemin du binaire `plakar`.
 - L'emplacement du fichier d'état.
 - La clé d'authentification Tailscale, lue par le sidecar.
@@ -181,4 +182,5 @@ Les champs sont : date RFC 3339 en UTC, ID court, taille (valeur + unité binair
   - Sans tag, le champ `tags=` est absent de la ligne ; plusieurs tags s'écrivent `tags=foo,bar`. Le chemin source peut contenir des espaces.
   - Store vide : sortie vide, code 0. Store inconnu : `plakar: could not resolve repository: @<nom>` sur stderr, code 1.
   - Observé une fois : sur une coupure réseau, `ls -tags` a rendu le code 0 avec `plakar: failed to read header … connection reset by peer` sur stdout. La lecture stricte des lignes en fait un Relevé en échec, et non un faux Dernier snapshot.
+- **Vérifié au ticket 07 (plakar v1.1.6) :** avec `-addr`, la ligne `launching webUI at …` recopie l'adresse demandée telle quelle. Avec `-addr 127.0.0.1:0`, elle affiche donc `:0`, pas le port réel. Sans `-addr`, plakar choisit un port libre et l'annonce correctement. Jobierre a retenu le décalage fixe (port public + `PLAKAR_UI_DECALAGE`), configurable. SIGTERM arrête `plakar ui` (code 1).
 - Les étapes manuelles de déploiement (clé Tailscale, préparation d'`appdata`, `plakar server` qui remplacent les Stores SFTP) pourront être guidées par `/wizard`.

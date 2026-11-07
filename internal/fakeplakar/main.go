@@ -8,16 +8,22 @@
 // reste actif.
 // Une réponse peut se faire attendre (DelayMS) pour imiter un
 // Store lent, et remplacer d'autres réponses une fois rejouée (Replace) pour
-// imiter une config plakar modifiée, par exemple par `store add`.
+// imiter une config plakar modifiée, par exemple par `store add`. Une réponse
+// peut enfin imiter `plakar ui` (Serve) : elle écoute sur l'adresse de
+// l'option -addr, annonce sa sortie standard, puis sert des pages jusqu'à son
+// arrêt.
 package main
 
 import (
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -31,6 +37,10 @@ type Response struct {
 	// Replace remplace, après cet appel, les réponses aux mêmes arguments, ou
 	// les ajoute.
 	Replace []Response `json:"replace,omitempty"`
+	// Serve imite `plakar ui` : chaque page répond « <store> <méthode> <URI> »,
+	// et 401 sans le paramètre plakar_token=<Token>.
+	Serve bool   `json:"serve,omitempty"`
+	Token string `json:"token,omitempty"`
 }
 
 func main() {
@@ -63,6 +73,9 @@ func main() {
 				}
 			}
 			time.Sleep(time.Duration(r.DelayMS) * time.Millisecond)
+			if r.Serve {
+				serve(args, r)
+			}
 			fmt.Fprint(os.Stdout, r.Stdout)
 			fmt.Fprint(os.Stderr, r.Stderr)
 			os.Exit(r.Code)
@@ -95,6 +108,30 @@ func replace(dir string, responses, news []Response) error {
 		return err
 	}
 	return os.Rename(tmp.Name(), filepath.Join(dir, "responses.json"))
+}
+
+// serve imite `plakar ui` sur l'adresse de l'option -addr, et ne rend jamais
+// la main : le processus s'arrête sur un signal.
+func serve(args []string, r Response) {
+	i := slices.Index(args, "-addr")
+	if i < 0 || i+1 >= len(args) {
+		fail("serve : option -addr absente de %q", args)
+	}
+	ln, err := net.Listen("tcp", args[i+1])
+	if err != nil {
+		fail("serve : %v", err)
+	}
+	store := strings.TrimPrefix(args[1], "@")
+	fmt.Fprint(os.Stdout, r.Stdout)
+	fmt.Fprint(os.Stderr, r.Stderr)
+	err = http.Serve(ln, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Query().Get("plakar_token") != r.Token {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		fmt.Fprintf(w, "%s %s %s", store, req.Method, req.URL.RequestURI())
+	}))
+	fail("serve : %v", err)
 }
 
 func record(path string, args []string) error {

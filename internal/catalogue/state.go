@@ -25,6 +25,8 @@ type storeState struct {
 	// le Seuil par défaut.
 	Seuil  string       `json:"seuil,omitempty"`
 	Releve *savedReleve `json:"releve,omitempty"`
+	// Port est le port d'Exploration attribué au Store.
+	Port int `json:"port,omitempty"`
 }
 
 // savedReleve est un releve.Result enregistrable : l'erreur y est un texte.
@@ -62,6 +64,9 @@ func (c *Catalogue) load() error {
 			}
 			c.seuils[name] = d
 		}
+		if s.Port != 0 {
+			c.ports[name] = s.Port
+		}
 		if r := s.Releve; r != nil {
 			res := releve.Result{At: r.At, Latest: r.Latest, Previous: r.Previous, Ecart: r.Ecart}
 			if r.Error != "" {
@@ -89,6 +94,7 @@ func (c *Catalogue) save() error {
 				s.Releve.Error = r.Err.Error()
 			}
 		}
+		s.Port = c.ports[name]
 		if s != (storeState{}) {
 			f.Stores[name] = s
 		}

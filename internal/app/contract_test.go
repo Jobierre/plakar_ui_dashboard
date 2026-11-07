@@ -7,6 +7,8 @@ package app_test
 
 import (
 	"fmt"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -49,6 +51,36 @@ func TestContractWithRealPlakar(t *testing.T) {
 		if got := rows["contrat"][field]; !want.MatchString(got) {
 			t.Errorf("%s = %q, attendu %v", field, got, want)
 		}
+	}
+}
+
+// TestContractExplorationWithRealPlakar lance une vraie Exploration : il
+// échoue si plakar change sa ligne de lancement, ou n'écoute plus sur
+// l'adresse demandée.
+func TestContractExplorationWithRealPlakar(t *testing.T) {
+	bin := realPlakar(t)
+	k := newKloset(t, bin)
+	base := freePorts(3)
+	svc := startServiceWith(t, k.plakar, newClock(time.Now().UTC().Format(time.RFC3339)),
+		map[string]string{"PLAKAR_UI_PORTS": fmt.Sprintf("%d-%d", base, base+2)})
+	svc.dashboard()
+
+	code, body := svc.explorer("contrat")
+
+	if code != http.StatusOK {
+		t.Fatalf("Explorer : code %d\n%s", code, body)
+	}
+	_, rows, _ := parseDashboard(t, body)
+	link, err := url.Parse(rows["contrat"]["exploration"])
+	if err != nil || link.Query().Get("plakar_token") == "" || link.Port() != fmt.Sprint(base) {
+		t.Fatalf("lien %q : port %d et jeton attendus", rows["contrat"]["exploration"], base)
+	}
+	if code, _ := svc.getPort(base, "/?"+link.RawQuery, testUser); code != http.StatusOK {
+		t.Errorf("page avec le jeton : code %d, attendu 200", code)
+	}
+	// Sans jeton, plakar ui refuse son API.
+	if code, _ := svc.getPort(base, "/api/info", testUser); code != http.StatusUnauthorized {
+		t.Errorf("API sans jeton : code %d, attendu 401", code)
 	}
 }
 
