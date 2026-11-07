@@ -9,9 +9,9 @@
 // Une réponse peut se faire attendre (DelayMS) pour imiter un
 // Store lent, et remplacer d'autres réponses une fois rejouée (Replace) pour
 // imiter une config plakar modifiée, par exemple par `store add`. Une réponse
-// peut enfin imiter `plakar ui` (Serve) : elle écoute sur l'adresse de
-// l'option -addr, annonce sa sortie standard, puis sert des pages jusqu'à son
-// arrêt.
+// peut enfin imiter `plakar ui` (Serve) : comme lui, elle annonce sa sortie
+// standard avant d'écouter sur l'adresse de l'option -addr (après ListenDelayMS),
+// puis sert des pages jusqu'à son arrêt.
 package main
 
 import (
@@ -41,6 +41,9 @@ type Response struct {
 	// et 401 sans le paramètre plakar_token=<Token>.
 	Serve bool   `json:"serve,omitempty"`
 	Token string `json:"token,omitempty"`
+	// ListenDelayMS sépare l'annonce de `plakar ui` de son écoute. Le vrai
+	// plakar imprime sa ligne de lancement, puis seulement ouvre son port.
+	ListenDelayMS int `json:"listen_delay_ms,omitempty"`
 }
 
 func main() {
@@ -117,13 +120,14 @@ func serve(args []string, r Response) {
 	if i < 0 || i+1 >= len(args) {
 		fail("serve : option -addr absente de %q", args)
 	}
+	store := strings.TrimPrefix(args[1], "@")
+	fmt.Fprint(os.Stdout, r.Stdout)
+	fmt.Fprint(os.Stderr, r.Stderr)
+	time.Sleep(time.Duration(r.ListenDelayMS) * time.Millisecond)
 	ln, err := net.Listen("tcp", args[i+1])
 	if err != nil {
 		fail("serve : %v", err)
 	}
-	store := strings.TrimPrefix(args[1], "@")
-	fmt.Fprint(os.Stdout, r.Stdout)
-	fmt.Fprint(os.Stderr, r.Stderr)
 	err = http.Serve(ln, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if req.URL.Query().Get("plakar_token") != r.Token {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)

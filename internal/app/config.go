@@ -46,14 +46,19 @@ type Config struct {
 	// Inactivite est la durée sans trafic après laquelle une Exploration est
 	// arrêtée (PLAKAR_UI_INACTIVITE, 15m par défaut).
 	Inactivite time.Duration
+	// ServeConfig est le fichier de configuration de `tailscale serve` que le
+	// service écrit au démarrage, à partir de son adresse et de sa plage de
+	// ports (PLAKAR_UI_SERVE_CONFIG). Vide, il n'est pas écrit.
+	ServeConfig string
 }
 
 func loadConfig(getenv func(string) string) (Config, error) {
 	c := Config{
-		Addr:      orDefault(getenv("PLAKAR_UI_ADDR"), "127.0.0.1:8080"),
-		PlakarBin: orDefault(getenv("PLAKAR_UI_PLAKAR_BIN"), "plakar"),
-		StatePath: orDefault(getenv("PLAKAR_UI_STATE"), "plakar-ui-state.json"),
-		Hote:      strings.TrimSpace(getenv("PLAKAR_UI_HOTE")),
+		Addr:        orDefault(getenv("PLAKAR_UI_ADDR"), "127.0.0.1:8080"),
+		PlakarBin:   orDefault(getenv("PLAKAR_UI_PLAKAR_BIN"), "plakar"),
+		StatePath:   orDefault(getenv("PLAKAR_UI_STATE"), "plakar-ui-state.json"),
+		Hote:        strings.TrimSpace(getenv("PLAKAR_UI_HOTE")),
+		ServeConfig: getenv("PLAKAR_UI_SERVE_CONFIG"),
 	}
 	for _, u := range strings.Split(getenv("PLAKAR_UI_UTILISATEURS"), ",") {
 		if u = strings.TrimSpace(u); u != "" {

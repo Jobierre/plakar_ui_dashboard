@@ -1,0 +1,58 @@
+# plakar-ui et son sidecar Tailscale. Le service partage le réseau du sidecar
+# et n'écoute que sur localhost ; aucun port n'est publié sur l'hôte : on ne
+# l'atteint que par le tailnet, en HTTPS, via `tailscale serve`.
+#
+# Variables : voir .env.example (cp .env.example .env).
+#
+# Les dossiers de PLAKAR_UI_APPDATA sont à préparer avant `docker compose up`
+# (sinon Docker les crée en root, et plakar-ui ne peut pas y écrire) et doivent
+# appartenir à 1000:1000, l'utilisateur de l'image :
+#   mkdir -p $PLAKAR_UI_APPDATA/{tailscale,serve,plakar-config,plakar-cache,state}
+#   chown 1000:1000 $PLAKAR_UI_APPDATA/{serve,plakar-config,plakar-cache,state}
+#   chmod 700 $PLAKAR_UI_APPDATA/plakar-config
+
+services:
+  tailscale:
+    image: tailscale/tailscale:v1.104.4
+    hostname: plakar-ui
+    environment:
+      #TS_AUTHKEY: ${TS_AUTHKEY:?TS_AUTHKEY est requis, voir .env.example}
+      TS_HOSTNAME: plakar-ui
+      TS_STATE_DIR: /var/lib/tailscale
+      # Mode userspace : ni /dev/net/tun ni NET_ADMIN, ce qui convient à un
+      # LXC. `tailscale serve` y fonctionne.
+      TS_USERSPACE: "true"
+      # Écrite par plakar-ui à son démarrage (443 et la plage d'Exploration),
+      # surveillée et réappliquée par le sidecar dès qu'elle change.
+      TS_SERVE_CONFIG: /serve/serve.json
+    volumes:
+      - ${PLAKAR_UI_APPDATA}/tailscale:/var/lib/tailscale
+      # Un dossier, pas un fichier : le sidecar ne verrait pas les
+      # remplacements atomiques d'un fichier monté seul.
+      - ${PLAKAR_UI_APPDATA}/serve:/serve:ro
+    # Posé ici et non sur plakar-ui : un conteneur qui partage le réseau d'un
+    # autre en partage aussi le /etc/hosts.
+    extra_hosts:
+      - "unraid:${UNRAID_IP:?UNRAID_IP est requis, voir .env.example}"
+    restart: unless-stopped
+
+  plakar-ui:
+    build: .
+    image: plakar-ui:latest
+    network_mode: service:tailscale
+    depends_on:
+      - tailscale
+    environment:
+      PLAKAR_UI_UTILISATEURS: ${PLAKAR_UI_UTILISATEURS:?PLAKAR_UI_UTILISATEURS est requis, voir .env.example}
+      PLAKAR_UI_HOTE: ${PLAKAR_UI_HOTE:?PLAKAR_UI_HOTE est requis, voir .env.example}
+      PLAKAR_UI_SEUIL: ${PLAKAR_UI_SEUIL:-}
+      PLAKAR_UI_INTERVALLE: ${PLAKAR_UI_INTERVALLE:-}
+      PLAKAR_UI_INACTIVITE: ${PLAKAR_UI_INACTIVITE:-}
+      PLAKAR_UI_PORTS: ${PLAKAR_UI_PORTS:-}
+      PLAKAR_UI_DECALAGE: ${PLAKAR_UI_DECALAGE:-}
+    volumes:
+      - ${PLAKAR_UI_APPDATA}/plakar-config:/home/plakar/.config/plakar
+      - ${PLAKAR_UI_APPDATA}/plakar-cache:/home/plakar/.cache/plakar
+      - ${PLAKAR_UI_APPDATA}/state:/data
+      - ${PLAKAR_UI_APPDATA}/serve:/serve
+    restart: unless-stopped

@@ -3,7 +3,8 @@ package app_test
 // Test de contrat : le service relève un vrai Kloset avec le vrai plakar. Il
 // échoue si une montée de version de plakar change le format de ses sorties.
 // Il est sauté quand plakar n'est pas installé ; PLAKAR_UI_CONTRACT_PLAKAR
-// désigne au besoin un autre binaire que celui du PATH.
+// désigne au besoin un autre binaire que celui du PATH, et rend alors le test
+// obligatoire (étage `contract` du Dockerfile).
 
 import (
 	"fmt"
@@ -88,14 +89,20 @@ func TestContractExplorationWithRealPlakar(t *testing.T) {
 // signe.
 var signedDuration = regexp.MustCompile(`^(0s|[+−]([0-9]+h)?([0-9]+m)?[0-9.]+(s|ms|µs))$`)
 
-// realPlakar renvoie le vrai binaire plakar, ou saute le test.
+// realPlakar renvoie le vrai binaire plakar, ou saute le test si plakar n'est
+// pas installé. Un binaire désigné par PLAKAR_UI_CONTRACT_PLAKAR doit exister :
+// l'image Docker s'en sert pour exiger le test avec son plakar figé.
 func realPlakar(t *testing.T) string {
 	t.Helper()
 	bin := os.Getenv("PLAKAR_UI_CONTRACT_PLAKAR")
-	if bin == "" {
+	required := bin != ""
+	if !required {
 		bin = "plakar"
 	}
 	path, err := exec.LookPath(bin)
+	if err != nil && required {
+		t.Fatalf("PLAKAR_UI_CONTRACT_PLAKAR=%s : %v", bin, err)
+	}
 	if err != nil {
 		t.Skipf("test de contrat sauté : plakar introuvable (%v)", err)
 	}

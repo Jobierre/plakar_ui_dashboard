@@ -1,2 +1,6 @@
 # Fichier d'état par défaut d'un lancement local
 /plakar-ui-state.json
+
+# Configuration et volumes locaux du compose
+/.env
+/appdata/

@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -30,6 +31,9 @@ const (
 	// launchPrefix ouvre la ligne où `plakar ui` annonce son adresse et son
 	// jeton : « launching webUI at http://127.0.0.1:9400?plakar_token=<uuid> ».
 	launchPrefix = "launching webUI at "
+	// pollInterval sépare deux essais de connexion au port de `plakar ui`,
+	// entre son annonce et son écoute.
+	pollInterval = 50 * time.Millisecond
 	// maxOutput borne la sortie gardée pour expliquer un échec de lancement.
 	maxOutput = 4096
 )
@@ -134,8 +138,8 @@ func (e *Explorations) Lancer(store string, port int) (string, error) {
 	return e.link(x), nil
 }
 
-// start lance `plakar ui` et attend sa ligne de lancement. Annuler ctx
-// (x.stop) arrête le processus, et le lancement échoue.
+// start lance `plakar ui` et attend sa ligne de lancement, puis son écoute.
+// Annuler ctx (x.stop) arrête le processus, et le lancement échoue.
 func (e *Explorations) start(ctx context.Context, x *exploration) error {
 	internal := fmt.Sprintf("127.0.0.1:%d", x.port+e.Decalage)
 	cmd := exec.CommandContext(ctx, e.Bin, "at", "@"+x.store, "ui", "-no-spawn", "-addr", internal)
@@ -174,28 +178,52 @@ func (e *Explorations) start(ctx context.Context, x *exploration) error {
 		close(x.exited)
 	})
 
-	select {
-	case token := <-tokens:
-		e.mu.Lock()
-		defer e.mu.Unlock()
-		x.prete, x.token = true, token
-		x.proxy = httputil.NewSingleHostReverseProxy(&url.URL{Scheme: "http", Host: internal})
-		x.last = e.Now()
-		return nil
-	case <-x.exited:
-		if ctx.Err() != nil {
-			return errors.New("Exploration arrêtée pendant son lancement")
+	deadline := e.After(startTimeout)
+	var token string
+	// `plakar ui` imprime sa ligne de lancement, puis seulement ouvre son
+	// port : l'Exploration n'est prête qu'une fois le jeton lu et le port
+	// ouvert.
+	var poll <-chan time.Time
+	for {
+		select {
+		case token = <-tokens:
+			poll = time.After(0)
+		case <-poll:
+			if conn, err := net.DialTimeout("tcp", internal, time.Second); err == nil {
+				conn.Close()
+				e.pret(x, token, internal)
+				return nil
+			}
+			// Attente technique, hors de l'horloge injectée.
+			poll = time.After(pollInterval)
+		case <-x.exited:
+			if ctx.Err() != nil {
+				return errors.New("Exploration arrêtée pendant son lancement")
+			}
+			msg := strings.TrimSpace(stderr.String() + other.String())
+			if msg == "" {
+				msg = fmt.Sprintf("plakar ui s'est arrêté (%v)", waitErr)
+			}
+			return errors.New(msg)
+		case <-deadline:
+			x.stop()
+			<-x.exited
+			if token != "" {
+				return fmt.Errorf("plakar ui n'écoute pas sur %s après %s", internal, startTimeout)
+			}
+			return fmt.Errorf("plakar ui n'a pas annoncé son adresse en %s", startTimeout)
 		}
-		msg := strings.TrimSpace(stderr.String() + other.String())
-		if msg == "" {
-			msg = fmt.Sprintf("plakar ui s'est arrêté (%v)", waitErr)
-		}
-		return errors.New(msg)
-	case <-e.After(startTimeout):
-		x.stop()
-		<-x.exited
-		return fmt.Errorf("plakar ui n'a pas annoncé son adresse en %s", startTimeout)
 	}
+}
+
+// pret marque l'Exploration prête : son `plakar ui` a annoncé ce jeton et
+// écoute sur internal.
+func (e *Explorations) pret(x *exploration, token, internal string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	x.prete, x.token = true, token
+	x.proxy = httputil.NewSingleHostReverseProxy(&url.URL{Scheme: "http", Host: internal})
+	x.last = e.Now()
 }
 
 // parseLaunch lit le jeton dans la ligne de lancement de `plakar ui`.

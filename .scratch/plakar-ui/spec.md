@@ -106,11 +106,11 @@ Un service léger, déployé en docker compose sur Unraid et accessible uniqueme
 ### Forme générale
 - Un binaire Go unique, qui sert les pages HTML (templates intégrés au binaire) et pilote le binaire `plakar` en sous-processus. Pas de base de données : un petit fichier d'état.
 - L'image contient le binaire du service et `plakar` dans une version figée. Pas de rclone.
-- Docker compose sur Unraid, avec deux conteneurs :
-  - un sidecar Tailscale, qui porte le nom `plakar-ui` sur le tailnet et fait le HTTPS avec `tailscale serve` (configuration déclarative) : 443 vers le tableau de bord, chaque port de la plage vers le même port local ;
+- Docker compose dans un LXC Docker du homelab (décision du 2026-11-07, au lieu d'Unraid directement), avec deux conteneurs :
+  - un sidecar Tailscale en mode userspace (ni `/dev/net/tun` ni `NET_ADMIN`), qui porte le nom `plakar-ui` sur le tailnet et fait le HTTPS avec `tailscale serve` (configuration déclarative, `TS_SERVE_CONFIG`) : 443 vers le tableau de bord, chaque port de la plage vers le même port local. Ce fichier est généré par le service à son démarrage (voir Configuration) ;
   - le service, qui partage le réseau du sidecar et n'écoute que sur localhost.
 - Volumes `appdata` : la config Plakar (le `stores.yml` du service, dédié et distinct de celui du Mac), le cache Plakar (indispensable : environ 1 min à froid contre environ 1 s à chaud, plusieurs Go) et le fichier d'état.
-- Le nom `unraid` est résolu depuis le conteneur (par exemple avec `extra_hosts`).
+- Le nom `unraid` est résolu depuis le conteneur par `extra_hosts` sur le sidecar, vers `UNRAID_IP` (obligatoire : depuis un LXC, `host-gateway` désignerait le LXC et non Unraid).
 - Pas de gestionnaire de secrets : les passphrases restent dans la config Plakar standard. Ce choix est assumé.
 
 ### Modules
@@ -140,7 +140,10 @@ Les champs sont : date RFC 3339 en UTC, ID court, taille (valeur + unité binair
 - Le décalage entre le port public d'un Store et le port interne de son `plakar ui` (100).
 - Le chemin du binaire `plakar`.
 - L'emplacement du fichier d'état.
-- La clé d'authentification Tailscale, lue par le sidecar.
+- La clé d'authentification Tailscale, lue par le sidecar. Elle est facultative : la ligne `TS_AUTHKEY` du compose est commentée (choix de Jobierre), le nœud se connecte alors par l'URL affichée dans les journaux du sidecar.
+- Le fichier de config `tailscale serve` (`PLAKAR_UI_SERVE_CONFIG`) : le service l'écrit au démarrage, de façon atomique, à partir de son adresse et de sa plage de ports. La plage n'a ainsi qu'une source de vérité, `PLAKAR_UI_PORTS`.
+- Côté compose uniquement : `PLAKAR_UI_APPDATA` (dossier des volumes) et `UNRAID_IP`.
+- Fixées par l'image : `PLAKAR_UI_ADDR`, `PLAKAR_UI_PLAKAR_BIN`, `PLAKAR_UI_STATE` et `PLAKAR_UI_SERVE_CONFIG`.
 
 ## Testing Decisions
 
@@ -183,4 +186,9 @@ Les champs sont : date RFC 3339 en UTC, ID court, taille (valeur + unité binair
   - Store vide : sortie vide, code 0. Store inconnu : `plakar: could not resolve repository: @<nom>` sur stderr, code 1.
   - Observé une fois : sur une coupure réseau, `ls -tags` a rendu le code 0 avec `plakar: failed to read header … connection reset by peer` sur stdout. La lecture stricte des lignes en fait un Relevé en échec, et non un faux Dernier snapshot.
 - **Vérifié au ticket 07 (plakar v1.1.6) :** avec `-addr`, la ligne `launching webUI at …` recopie l'adresse demandée telle quelle. Avec `-addr 127.0.0.1:0`, elle affiche donc `:0`, pas le port réel. Sans `-addr`, plakar choisit un port libre et l'annonce correctement. Jobierre a retenu le décalage fixe (port public + `PLAKAR_UI_DECALAGE`), configurable. SIGTERM arrête `plakar ui` (code 1).
+- **Vérifié au ticket 08 (plakar v1.1.6, sous Linux) :**
+  - `plakar ui` imprime sa ligne `launching webUI at …` **avant** d'ouvrir son port (`ui/v2/ui.go`). Une Exploration attend donc que le port interne accepte une connexion avant de donner le lien, et le faux plakar des tests reproduit cet ordre.
+  - Au premier lancement sur un cache neuf, plakar imprime sur stdout un avis « Welcome to plakar ! » sur son contrôle de mises à jour, qui faussait `store show -json`. Les « cookies » de plakar vivent dans le dossier de cache. Le point d'entrée de l'image lance `plakar -disable-security-check` avant le service (choix de Jobierre : contrôle désactivé, les montées de version se font dans le Dockerfile).
+  - plakar se compile statiquement (`CGO_ENABLED=0 go install github.com/PlakarKorp/plakar@v1.1.6`). L'image n'existe que si le test de contrat passe avec ce binaire (étage `contract`).
+  - L'image tourne sous l'UID 1000 : les dossiers `appdata` lui appartiennent.
 - Les étapes manuelles de déploiement (clé Tailscale, préparation d'`appdata`, `plakar server` qui remplacent les Stores SFTP) pourront être guidées par `/wizard`.

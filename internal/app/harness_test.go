@@ -57,8 +57,9 @@ type response struct {
 	// arguments (chacune porte ses Args).
 	Replace []response `json:"replace,omitempty"`
 	// Serve imite `plakar ui` sur l'adresse de -addr, avec ce jeton.
-	Serve bool   `json:"serve,omitempty"`
-	Token string `json:"token,omitempty"`
+	Serve         bool   `json:"serve,omitempty"`
+	Token         string `json:"token,omitempty"`
+	ListenDelayMS int    `json:"listen_delay_ms,omitempty"`
 }
 
 // fakePlakar est un faux binaire plakar propre à un test.
@@ -92,11 +93,18 @@ func (f *fakePlakar) ls(store string, r response) {
 // ui fait imiter `plakar at @<store> ui` au faux plakar, sur le port interne
 // qui correspond à ce port public (décalage par défaut de 100), avec ce jeton.
 func (f *fakePlakar) ui(store string, port int, token string) {
+	f.uiListeningAfter(store, port, token, 0)
+}
+
+// uiListeningAfter est ui, mais le faux `plakar ui` n'ouvre son port que ce
+// délai après sa ligne de lancement.
+func (f *fakePlakar) uiListeningAfter(store string, port int, token string, delay time.Duration) {
 	internal := fmt.Sprintf("127.0.0.1:%d", port+100)
 	f.on(uiArgs(store, port), response{
-		Serve:  true,
-		Token:  token,
-		Stdout: "launching webUI at http://" + internal + "?plakar_token=" + token + "\n",
+		Serve:         true,
+		Token:         token,
+		Stdout:        "launching webUI at http://" + internal + "?plakar_token=" + token + "\n",
+		ListenDelayMS: int(delay / time.Millisecond),
 	})
 }
 

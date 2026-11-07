@@ -361,3 +361,25 @@ func TestStoppingTheServiceStopsItsExplorations(t *testing.T) {
 
 	assertGone(t, pid)
 }
+
+// Le vrai `plakar ui` imprime sa ligne de lancement avant d'ouvrir son port :
+// le lien n'est donné qu'une fois le port ouvert, sans quoi le premier clic
+// tombe sur une erreur du relais.
+func TestExploreWaitsForPlakarUIToListenBeforeGivingTheLink(t *testing.T) {
+	base := freePorts(3)
+	plakar := newFakePlakar(t)
+	plakar.stores(`{"arr":{}}` + "\n")
+	plakar.ls("arr", response{})
+	plakar.uiListeningAfter("arr", base, "tok-1", 500*time.Millisecond)
+	svc := startService(t, plakar, newClock("2026-11-06T17:00:05Z"), explorationEnv(base, nil))
+	svc.dashboard()
+
+	if code, body := svc.explorer("arr"); code != http.StatusOK {
+		t.Fatalf("Explorer : code %d\n%s", code, body)
+	}
+
+	code, page := svc.getPort(base, "/?plakar_token=tok-1", testUser)
+	if code != http.StatusOK || page != "arr GET /?plakar_token=tok-1" {
+		t.Errorf("premier accès au lien : code %d, page %q", code, page)
+	}
+}

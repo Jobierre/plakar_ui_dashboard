@@ -19,6 +19,7 @@ import (
 	"plakar-ui/internal/exploration"
 	"plakar-ui/internal/plakar"
 	"plakar-ui/internal/planificateur"
+	"plakar-ui/internal/tailscaleserve"
 	"plakar-ui/internal/web"
 )
 
@@ -82,13 +83,23 @@ func Start(ctx context.Context, opts Options) (*App, error) {
 	for _, port := range cfg.Ports.Ports() {
 		pl, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 		if err != nil {
-			ln.Close()
-			for _, l := range portLns {
-				l.Close()
-			}
+			closeAll(ln, portLns)
 			return nil, fmt.Errorf("port d'Exploration %d (PLAKAR_UI_PORTS) : %w", port, err)
 		}
 		portLns[port] = pl
+	}
+	if cfg.ServeConfig != "" {
+		// Une seule source de vérité : la config de `tailscale serve` suit
+		// PLAKAR_UI_ADDR et PLAKAR_UI_PORTS.
+		// Chaque port public vers l'adresse où le service écoute vraiment.
+		targets := map[int]string{443: "http://" + ln.Addr().String()}
+		for port, pl := range portLns {
+			targets[port] = "http://" + pl.Addr().String()
+		}
+		if err := tailscaleserve.Write(cfg.ServeConfig, targets); err != nil {
+			closeAll(ln, portLns)
+			return nil, fmt.Errorf("config tailscale serve (PLAKAR_UI_SERVE_CONFIG) : %w", err)
+		}
 	}
 	ctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	plan := &planificateur.Planificateur{
@@ -171,6 +182,15 @@ func Start(ctx context.Context, opts Options) (*App, error) {
 	}
 
 	return a, nil
+}
+
+// closeAll ferme l'écoute du tableau de bord et celles des ports d'Exploration,
+// quand le démarrage échoue.
+func closeAll(ln net.Listener, portLns map[int]net.Listener) {
+	ln.Close()
+	for _, l := range portLns {
+		l.Close()
+	}
 }
 
 // URL est l'adresse de base du tableau de bord.
