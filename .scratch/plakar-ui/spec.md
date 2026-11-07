@@ -58,9 +58,9 @@ Un service léger, déployé en docker compose sur Unraid et accessible uniqueme
 
 28. En tant qu'Utilisateur autorisé, je veux taper une Commande de Store (`plakar store add …`) dans un bloc de l'interface, afin d'ajouter un Store avec la syntaxe officielle de Plakar, qui reste valable même si Plakar évolue.
 29. En tant qu'Utilisateur autorisé, je veux voir la sortie et le code de retour de ma Commande de Store, afin de savoir si elle a réussi.
-30. En tant qu'Utilisateur autorisé, je veux pouvoir utiliser `add`, `set`, `unset`, `rm` et `ls`, afin de gérer complètement mes Stores.
-31. En tant qu'Utilisateur autorisé, je veux que `plakar store show` soit refusé, afin que mes passphrases ne s'affichent jamais dans un navigateur.
-32. En tant qu'Utilisateur autorisé, je veux que toute autre commande Plakar (`backup`, `check`…) ou toute autre commande système soit refusée, afin que le bloc ne devienne pas un terminal distant.
+30. En tant qu'Utilisateur autorisé, je veux pouvoir utiliser `add`, `set`, `unset`, `rm` et `show`, afin de gérer complètement mes Stores.
+31. En tant qu'Utilisateur autorisé, je veux que `plakar store show -secrets` soit refusé (`show` sans `-secrets` masque les secrets), afin que mes passphrases ne s'affichent jamais dans un navigateur.
+32. En tant qu'Utilisateur autorisé, je veux que toute autre commande Plakar (`backup`, `store check`, `store ping`…) ou toute autre commande système soit refusée, afin que le bloc ne devienne pas un terminal distant.
 33. En tant qu'Utilisateur autorisé, je veux que les caractères de shell (`;`, `|`, `$(…)`, `&&`…) n'aient aucun effet spécial, afin qu'on ne puisse pas enchaîner une autre commande.
 34. En tant qu'Utilisateur autorisé, je veux pouvoir mettre une valeur entre guillemets (une passphrase avec des espaces), afin de saisir n'importe quelle passphrase.
 35. En tant qu'Utilisateur autorisé, je veux que mes Commandes de Store ne soient jamais journalisées ni conservées, afin que les passphrases qu'elles contiennent ne traînent nulle part.
@@ -117,7 +117,7 @@ Un service léger, déployé en docker compose sur Unraid et accessible uniqueme
 - **Catalogue** : liste des Stores, lue dans la config Plakar via `plakar store show -json` (plakar v1.1.6 n'a pas de `store ls` ; le service ne garde que les noms, les secrets étant de toute façon masqués par plakar), triée par nom (plakar la rend dans un ordre aléatoire), plus l'état propre au service pour chaque Store : Seuil de retard éventuel, port d'Exploration attribué, résultat du dernier Relevé. Il attribue un port au premier Store apparu (le premier libre de la plage) et le libère quand le Store disparaît. Il persiste l'état de façon atomique.
 - **Relevé** : pour un Store, lance `plakar at @<store> ls -tags`, garde les deux premières lignes (Plakar trie du plus récent au plus ancien), produit le Dernier snapshot, le Snapshot précédent éventuel et l'Écart, ou une erreur (le Store est alors Injoignable). Un planificateur déclenche un Relevé par Store selon l'intervalle (1 h par défaut), au plus un Relevé à la fois par Store. Il est aussi déclenchable à la demande.
 - **État** : une fonction pure (Dernier snapshot, Seuil, maintenant, erreur du dernier Relevé) vers À jour, En retard ou Injoignable. Elle est calculée à l'affichage, avec l'horloge injectée, et n'est donc pas figée au moment du Relevé.
-- **Commande de Store** : découpe la ligne saisie en arguments, en gérant les guillemets simples et doubles et sans aucune expansion. Elle accepte uniquement `plakar store` suivi de `add | set | unset | rm | ls` (le préfixe `plakar` est facultatif) et exécute le binaire `plakar` directement, sans shell. Elle renvoie la sortie standard, la sortie d'erreur et le code de retour. Elle ne journalise ni ne stocke jamais la commande. Après une réussite, elle rafraîchit le Catalogue et lance un Relevé des nouveaux Stores.
+- **Commande de Store** : découpe la ligne saisie en arguments, en gérant les guillemets simples et doubles et sans aucune expansion. Elle accepte uniquement `plakar store` suivi de `add | set | unset | rm | show` (le préfixe `plakar` est facultatif ; `show` est refusé avec l'option `-secrets`, sous toutes ses formes) et exécute le binaire `plakar` directement, sans shell. Elle renvoie la sortie standard, la sortie d'erreur et le code de retour. Elle ne journalise ni ne stocke jamais la commande. Après une réussite, elle rafraîchit le Catalogue et lance un Relevé des nouveaux Stores.
 - **Exploration** : lance `plakar at @<store> ui -no-spawn -addr 127.0.0.1:<port interne>`, avec un port interne décalé par rapport au port public pour éviter toute collision. Elle lit le jeton sur la sortie standard. Elle se termine sur inactivité (15 min par défaut), sur un arrêt demandé, ou quand le Store est retiré. Au plus une Exploration par Store.
   - Le service écoute lui-même sur chaque port public de la plage, en localhost, et fait proxy vers le `plakar ui` correspondant. C'est ce qui lui permet de mesurer l'inactivité et d'appliquer la vérification d'identité sur les Explorations.
   - Ligne émise par `plakar ui`, relevée lors du prototype : `launching webUI at http://127.0.0.1:9199?plakar_token=<uuid>`. Le jeton change à chaque lancement, et l'API répond 401 sans lui.
@@ -163,7 +163,7 @@ Les champs sont : date RFC 3339 en UTC, ID court, taille (valeur + unité binair
 - Les Stores SFTP : ils seront remplacés par des `plakar server` HTTP, montés par Jobierre hors de ce projet.
 - Un gestionnaire de secrets (Vaultwarden ou autre).
 - Le déclenchement de backups, checks, syncs ou restaurations depuis le service. Ces actions passent par l'Exploration (le `plakar ui` officiel) ou la ligne de commande.
-- `plakar store show` et `plakar store import`.
+- `plakar store show -secrets`, `plakar store import`, `plakar store check` et `plakar store ping`.
 - L'accès LAN sans Tailscale, et tout autre mode d'authentification.
 - L'option « masquer un Store ».
 - Les alertes sur l'Écart.
@@ -175,7 +175,7 @@ Les champs sont : date RFC 3339 en UTC, ID court, taille (valeur + unité binair
   - Un Store **Injoignable** garde l'affichage de ses dernières valeurs connues, avec le message d'erreur.
 - **Sécurité :** la config Plakar du service contient les passphrases en clair. Elle doit être lisible seulement par le conteneur (droits `600`), et le volume `appdata` correspondant doit être traité comme sensible.
 - **Points vérifiés à l'implémentation (ticket 01, plakar v1.1.6) :**
-  - `plakar store ls` n'existe pas (usage : `add|check|import|ping|rm|set|show|unset`). `plakar store show -json` émet une ligne `{"<nom>": {…}}` par Store, secrets remplacés par `********`, dans un ordre aléatoire. Impact sur la Commande de Store : voir le ticket 06.
+  - `plakar store ls` n'existe pas (usage : `add|check|import|ping|rm|set|show|unset`). `plakar store show -json` émet une ligne `{"<nom>": {…}}` par Store, secrets remplacés par `********`, dans un ordre aléatoire. Impact sur la Commande de Store, tranché par Jobierre le 2026-11-07 : `ls` est retiré et remplacé par `show` sans `-secrets` (voir le ticket 06).
   - Tailles : `3 B`, `4.9 KiB`, `914 MiB`, `1.3 GiB` (valeur, espace, unité binaire). Durées au format Go (`21s`, `1m11s`, `12m38s`).
   - Sans tag, le champ `tags=` est absent de la ligne ; plusieurs tags s'écrivent `tags=foo,bar`. Le chemin source peut contenir des espaces.
   - Store vide : sortie vide, code 0. Store inconnu : `plakar: could not resolve repository: @<nom>` sur stderr, code 1.
