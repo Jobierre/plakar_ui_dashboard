@@ -146,14 +146,11 @@ func TestRefreshIsRefusedFromAnotherSite(t *testing.T) {
 		t.Fatal(err)
 	}
 	req.Header.Set("Sec-Fetch-Site", "cross-site")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
+	// Un Utilisateur autorisé : seule l'origine de la requête la fait refuser.
+	code, _ := svc.do(req, testUser)
 
-	if resp.StatusCode != http.StatusForbidden {
-		t.Errorf("code %d, attendu %d", resp.StatusCode, http.StatusForbidden)
+	if code != http.StatusForbidden {
+		t.Errorf("code %d, attendu %d", code, http.StatusForbidden)
 	}
 	svc.dashboard()
 	if got := lsCalls(plakar, "arr"); got != 1 {

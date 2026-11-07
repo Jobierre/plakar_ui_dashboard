@@ -1,8 +1,10 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"plakar-ui/internal/etat"
@@ -26,6 +28,13 @@ type Config struct {
 	// Intervalle sépare deux Relevés planifiés d'un même Store
 	// (PLAKAR_UI_INTERVALLE, 1h par défaut).
 	Intervalle time.Duration
+	// Users sont les Utilisateurs autorisés, des identités Tailscale (emails)
+	// séparées par des virgules (PLAKAR_UI_UTILISATEURS).
+	Users []string
+	// Hote est le nom Tailscale du service, par exemple
+	// plakar-ui.<tailnet>.ts.net (PLAKAR_UI_HOTE). Les requêtes adressées à
+	// un autre nom que lui ou localhost sont refusées.
+	Hote string
 }
 
 func loadConfig(getenv func(string) string) (Config, error) {
@@ -33,6 +42,20 @@ func loadConfig(getenv func(string) string) (Config, error) {
 		Addr:      orDefault(getenv("PLAKAR_UI_ADDR"), "127.0.0.1:8080"),
 		PlakarBin: orDefault(getenv("PLAKAR_UI_PLAKAR_BIN"), "plakar"),
 		StatePath: orDefault(getenv("PLAKAR_UI_STATE"), "plakar-ui-state.json"),
+		Hote:      strings.TrimSpace(getenv("PLAKAR_UI_HOTE")),
+	}
+	for _, u := range strings.Split(getenv("PLAKAR_UI_UTILISATEURS"), ",") {
+		if u = strings.TrimSpace(u); u != "" {
+			c.Users = append(c.Users, u)
+		}
+	}
+	// « nom. » est la forme absolue de « nom ».
+	c.Hote = strings.TrimSuffix(c.Hote, ".")
+	if strings.ContainsAny(c.Hote, ":/") {
+		return c, fmt.Errorf("PLAKAR_UI_HOTE %q : un nom d'hôte seul est attendu, sans schéma ni port, par exemple plakar-ui.<tailnet>.ts.net", c.Hote)
+	}
+	if len(c.Users) == 0 {
+		return c, errors.New("PLAKAR_UI_UTILISATEURS est vide : sans Utilisateur autorisé, toute requête serait refusée. Indiquez au moins une identité Tailscale, par exemple PLAKAR_UI_UTILISATEURS=moi@example.com (plusieurs identités séparées par des virgules)")
 	}
 	seuil, err := etat.ParseSeuil(orDefault(getenv("PLAKAR_UI_SEUIL"), "26h"))
 	if err != nil {

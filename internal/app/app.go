@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"plakar-ui/internal/acces"
 	"plakar-ui/internal/catalogue"
 	"plakar-ui/internal/plakar"
 	"plakar-ui/internal/planificateur"
@@ -77,16 +78,22 @@ func Start(ctx context.Context, opts Options) (*App, error) {
 		After:      opts.After,
 		Log:        log,
 	}
+	access := acces.Acces{Users: cfg.Users}
+	if cfg.Hote != "" {
+		access.Hosts = []string{cfg.Hote}
+	}
 	a := &App{
 		url: "http://" + ln.Addr().String(),
-		server: &http.Server{Handler: web.Handler(web.Dashboard{
+		// Le contrôle d'accès enveloppe tout le service : chaque route, y
+		// compris celles ajoutées plus tard, passe par lui.
+		server: &http.Server{Handler: access.Handler(web.Handler(web.Dashboard{
 			Catalogue:    cat,
 			DefaultSeuil: cfg.DefaultSeuil,
 			Trigger:      plan.Trigger,
 			Now:          opts.Now,
 			Location:     opts.Location,
 			Log:          log,
-		})},
+		}))},
 		cancel: cancel,
 		plan:   plan,
 	}
@@ -98,7 +105,12 @@ func Start(ctx context.Context, opts Options) (*App, error) {
 			log.Error("serveur HTTP", "err", err)
 		}
 	})
-	log.Info("tableau de bord servi", "url", a.url, "stores", len(names))
+	log.Info("tableau de bord servi", "url", a.url, "stores", len(names), "hote", cfg.Hote)
+	if cfg.Hote == "" {
+		// Derrière `tailscale serve`, le Host reçu est le nom Tailscale du
+		// service : sans lui, toute requête venue du tailnet est refusée.
+		log.Warn("PLAKAR_UI_HOTE est vide : seuls les noms de localhost sont servis")
+	}
 
 	return a, nil
 }

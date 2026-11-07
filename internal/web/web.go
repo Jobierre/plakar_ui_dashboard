@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"plakar-ui/internal/acces"
 	"plakar-ui/internal/catalogue"
 	"plakar-ui/internal/etat"
 	"plakar-ui/internal/releve"
@@ -43,7 +44,7 @@ type Dashboard struct {
 func Handler(c Dashboard) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		c.render(w, http.StatusOK, nil)
+		c.render(w, r, http.StatusOK, nil)
 	})
 	mux.HandleFunc("POST /stores/{store}/seuil", func(w http.ResponseWriter, r *http.Request) {
 		name := r.PathValue("store")
@@ -52,7 +53,7 @@ func Handler(c Dashboard) http.Handler {
 		if text := r.FormValue("seuil"); strings.TrimSpace(text) != "" {
 			d, err := etat.ParseSeuil(text)
 			if err != nil {
-				c.render(w, http.StatusBadRequest, &seuilRefused{store: name, text: text, err: err.Error()})
+				c.render(w, r, http.StatusBadRequest, &seuilRefused{store: name, text: text, err: err.Error()})
 				return
 			}
 			seuil = &d
@@ -62,7 +63,7 @@ func Handler(c Dashboard) http.Handler {
 				http.NotFound(w, r)
 				return
 			}
-			c.render(w, http.StatusInternalServerError, &seuilRefused{store: name, text: r.FormValue("seuil"), err: err.Error()})
+			c.render(w, r, http.StatusInternalServerError, &seuilRefused{store: name, text: r.FormValue("seuil"), err: err.Error()})
 			return
 		}
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -90,20 +91,25 @@ type seuilRefused struct {
 	store, text, err string
 }
 
-// render écrit le tableau de bord, avec le Seuil refusé éventuel.
-func (c Dashboard) render(w http.ResponseWriter, status int, refused *seuilRefused) {
+// render écrit le tableau de bord de l'Utilisateur autorisé de la requête,
+// avec le Seuil refusé éventuel.
+func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, refused *seuilRefused) {
 	now := c.Now()
 	rows := make([]row, 0)
 	for _, e := range c.Catalogue.Entries() {
-		r := c.newRow(e, now)
+		line := c.newRow(e, now)
 		if refused != nil && refused.store == e.Name {
-			r.SeuilInput, r.SeuilError = refused.text, refused.err
+			line.SeuilInput, line.SeuilError = refused.text, refused.err
 		}
-		rows = append(rows, r)
+		rows = append(rows, line)
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	if err := page.Execute(w, rows); err != nil {
+	data := struct {
+		User string
+		Rows []row
+	}{User: acces.User(r.Context()), Rows: rows}
+	if err := page.Execute(w, data); err != nil {
 		c.Log.Error("rendu du tableau de bord", "err", err)
 	}
 }

@@ -265,8 +265,9 @@ func tryStartService(plakar *fakePlakar, clk *clock, env map[string]string) (*ap
 // erreur de démarrage.
 func tryStartServiceWith(plakarBin string, clk *clock, env map[string]string) (*app.App, error) {
 	full := map[string]string{
-		"PLAKAR_UI_ADDR":       "127.0.0.1:0",
-		"PLAKAR_UI_PLAKAR_BIN": plakarBin,
+		"PLAKAR_UI_ADDR":         "127.0.0.1:0",
+		"PLAKAR_UI_PLAKAR_BIN":   plakarBin,
+		"PLAKAR_UI_UTILISATEURS": testUser,
 	}
 	for k, v := range env {
 		full[k] = v
@@ -280,9 +281,41 @@ func tryStartServiceWith(plakarBin string, clk *clock, env map[string]string) (*
 	})
 }
 
+// testUser est l'Utilisateur autorisé par défaut des tests : le harnais pose
+// son identité sur chaque requête, comme le ferait `tailscale serve`.
+const testUser = "jobierre@example.com"
+
+// identityHeader est l'en-tête d'identité posé par `tailscale serve`.
+const identityHeader = "Tailscale-User-Login"
+
 func (s *service) get(path string) (int, string) {
 	s.t.Helper()
-	resp, err := http.Get(s.app.URL() + path)
+	req, err := http.NewRequest(http.MethodGet, s.app.URL()+path, nil)
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	return s.do(req, testUser)
+}
+
+// request prépare une requête vers le service, à envoyer avec do.
+func (s *service) request(method, path string) *http.Request {
+	s.t.Helper()
+	req, err := http.NewRequest(method, s.app.URL()+path, nil)
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	return req
+}
+
+// do envoie la requête avec cette identité Tailscale (aucun en-tête si elle
+// est vide), en suivant les redirections (qui gardent l'en-tête), et renvoie
+// le code et le corps obtenus.
+func (s *service) do(req *http.Request, user string) (int, string) {
+	s.t.Helper()
+	if user != "" {
+		req.Header.Set(identityHeader, user)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		s.t.Fatal(err)
 	}
@@ -312,16 +345,12 @@ func (s *service) releve(store string) (int, string) {
 // redirection.
 func (s *service) postForm(path string, values url.Values) (int, string) {
 	s.t.Helper()
-	resp, err := http.PostForm(s.app.URL()+path, values)
+	req, err := http.NewRequest(http.MethodPost, s.app.URL()+path, strings.NewReader(values.Encode()))
 	if err != nil {
 		s.t.Fatal(err)
 	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		s.t.Fatal(err)
-	}
-	return resp.StatusCode, string(body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	return s.do(req, testUser)
 }
 
 // waitRow relit le tableau de bord jusqu'à ce que la ligne du Store vérifie

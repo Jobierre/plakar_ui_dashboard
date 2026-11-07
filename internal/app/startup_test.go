@@ -31,15 +31,20 @@ func TestStartupListsStoresThenMakesOneReleveOfEachWithTheConfiguredPlakar(t *te
 }
 
 func TestServiceRefusesToListenOutsideLocalhost(t *testing.T) {
-	plakar := newFakePlakar(t)
-	plakar.stores("")
-	a, err := tryStartService(plakar, newClock("2026-11-06T17:00:00Z"),
-		map[string]string{"PLAKAR_UI_ADDR": "0.0.0.0:8080"})
-	if err == nil {
-		a.Close()
-		t.Fatal("le service a accepté d'écouter sur 0.0.0.0")
-	}
-	if !strings.Contains(err.Error(), "localhost") {
-		t.Errorf("erreur = %q, doit expliquer que l'adresse doit être sur localhost", err)
+	// Toutes les formes d'écoute sur toutes les interfaces, et une adresse
+	// du LAN.
+	for _, addr := range []string{"0.0.0.0:8080", ":8080", "[::]:8080", "192.168.1.10:8080"} {
+		plakar := newFakePlakar(t)
+		plakar.stores("")
+		a, err := tryStartService(plakar, newClock("2026-11-06T17:00:00Z"),
+			map[string]string{"PLAKAR_UI_ADDR": addr})
+		if err == nil {
+			a.Close()
+			t.Errorf("le service a accepté d'écouter sur %q", addr)
+			continue
+		}
+		if !strings.Contains(err.Error(), "localhost") {
+			t.Errorf("%q : erreur = %q, doit expliquer que l'adresse doit être sur localhost", addr, err)
+		}
 	}
 }

@@ -5,13 +5,14 @@
 <title>plakar-ui</title>
 </head>
 <body>
+<p>Connecté en tant que <span id="utilisateur">{{.User}}</span></p>
 <h1>Stores</h1>
 <table>
 <thead>
 <tr><th>Store</th><th>Dernier Relevé</th><th></th><th></th><th>État</th><th>Seuil de retard</th><th></th><th></th><th>Dernier snapshot</th><th>Âge</th><th>ID</th><th>Taille</th><th>Écart de taille</th><th>Durée</th><th>Écart de durée</th><th>Source</th><th>Tags</th><th>Erreur</th></tr>
 </thead>
 <tbody>
-{{- range .}}
+{{- range .Rows}}
 <tr data-store="{{.Name}}"{{if .Pending}} data-pending{{end}}>
 <td data-field="name">{{.Name}}</td>
 <td data-field="releve">{{.ReleveAt}}</td>
