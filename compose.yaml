@@ -19,9 +19,12 @@ services:
       #TS_AUTHKEY: ${TS_AUTHKEY:?TS_AUTHKEY est requis, voir .env.example}
       TS_HOSTNAME: plakar-ui
       TS_STATE_DIR: /var/lib/tailscale
-      # Mode userspace : ni /dev/net/tun ni NET_ADMIN, ce qui convient à un
-      # LXC. `tailscale serve` y fonctionne.
-      TS_USERSPACE: "true"
+      # Mode TUN noyau, et surtout pas userspace : en userspace, tailscaled
+      # relaie vers 127.0.0.1:<port> toute connexion du tailnet sur un port que
+      # serve ne gère pas. Un pair joindrait alors le tableau de bord (8080)
+      # sans passer par serve, en forgeant Tailscale-User-Login. En TUN, le
+      # trafic du tailnet arrive sur tailscale0, et localhost reste injoignable.
+      TS_USERSPACE: "false"
       # Écrite par plakar-ui à son démarrage (443 et la plage d'Exploration),
       # surveillée et réappliquée par le sidecar dès qu'elle change.
       TS_SERVE_CONFIG: /serve/serve.json
@@ -30,6 +33,12 @@ services:
       # Un dossier, pas un fichier : le sidecar ne verrait pas les
       # remplacements atomiques d'un fichier monté seul.
       - ${PLAKAR_UI_APPDATA}/serve:/serve:ro
+    # Requis par le mode TUN. Dans un LXC Proxmox, /dev/net/tun doit être
+    # autorisé dans la conf du conteneur (ticket 09).
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
     # Posé ici et non sur plakar-ui : un conteneur qui partage le réseau d'un
     # autre en partage aussi le /etc/hosts.
     extra_hosts:

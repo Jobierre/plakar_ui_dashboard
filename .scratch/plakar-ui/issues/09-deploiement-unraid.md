@@ -13,3 +13,6 @@
 - [ ] Une Exploration s'ouvre depuis le PC sur `https://plakar-ui.<tailnet>.ts.net:<port>`.
 - [ ] Une identité Tailscale hors de la liste est refusée.
 - [ ] Depuis le LAN, sans passer par Tailscale, aucun port du service ne répond.
+- [ ] Le LXC Docker autorise `/dev/net/tun` : le sidecar tourne en mode TUN (voir spec, « Sécurité, mode TUN obligatoire »).
+- [ ] Depuis un autre nœud du tailnet, `http://plakar-ui:8080` et les ports internes `plakar ui` (9400-9420) ne répondent pas : seuls 443 et la plage d'Exploration, via `tailscale serve`, sont joignables.
+- [ ] La politique du tailnet n'ouvre vers plakar-ui que 443 et la plage d'Exploration (exemple dans `.env.example`).
