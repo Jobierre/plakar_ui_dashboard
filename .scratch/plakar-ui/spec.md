@@ -173,6 +173,7 @@ Les champs sont : date RFC 3339 en UTC, ID court, taille (valeur + unité binair
 - **Décisions confirmées par Jobierre après la rédaction :**
   - Un Store **sans aucun snapshot** est affiché **En retard**, puisqu'il n'a pas de Dernier snapshot dans le Seuil.
   - Un Store **Injoignable** garde l'affichage de ses dernières valeurs connues, avec le message d'erreur.
+- **Sécurité, risque accepté (2026-11-07) :** les clés passées à `store add` et `store set` ne sont pas filtrées. Or `passphrase_cmd` fait exécuter une commande par plakar à chaque Relevé, dans le conteneur. Un Utilisateur autorisé peut donc exécuter du code dans le conteneur par ce biais. Jobierre l'accepte : voir le ticket 06.
 - **Sécurité :** la config Plakar du service contient les passphrases en clair. Elle doit être lisible seulement par le conteneur (droits `600`), et le volume `appdata` correspondant doit être traité comme sensible.
 - **Points vérifiés à l'implémentation (ticket 01, plakar v1.1.6) :**
   - `plakar store ls` n'existe pas (usage : `add|check|import|ping|rm|set|show|unset`). `plakar store show -json` émet une ligne `{"<nom>": {…}}` par Store, secrets remplacés par `********`, dans un ordre aléatoire. Impact sur la Commande de Store, tranché par Jobierre le 2026-11-07 : `ls` est retiré et remplacé par `show` sans `-secrets` (voir le ticket 06).
