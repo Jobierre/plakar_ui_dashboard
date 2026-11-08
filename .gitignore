@@ -4,3 +4,6 @@
 # Configuration et volumes locaux du compose
 /.env
 /appdata/
+
+# Volumes de test locaux du compose (état Tailscale, clés, config plakar)
+/test_plakar/
