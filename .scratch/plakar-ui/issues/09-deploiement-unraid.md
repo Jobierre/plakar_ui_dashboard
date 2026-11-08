@@ -1,12 +1,14 @@
 # 09: Déploiement sur Unraid
 
-**What to build:** Jobierre déploie plakar-ui sur Unraid, guidé par un assistant interactif (`/wizard`) qui enchaîne les étapes que lui seul peut faire, puis vérifie depuis son PC que tout fonctionne et que l'accès est bien restreint.
+**What to build:** Jobierre déploie plakar-ui dans un LXC Docker du homelab (décision du 2026-11-07 : plus directement sur Unraid, qui reste l'hôte des `plakar server`), guidé par un assistant interactif qui enchaîne les étapes que lui seul peut faire, puis vérifie depuis son PC que tout fonctionne et que l'accès est bien restreint.
+
+**Assistant :** `scripts/deploy-wizard.sh`, à lancer sur le Mac depuis le dépôt. Il écrit `.env`, affiche les commandes pour Proxmox et le LXC, et automatise les vérifications depuis le PC (HTTPS, ports du tailnet et du LAN, 403). Le transfert du code vers le LXC reste à la main de Jobierre.
 
 **Blocked by:** 08 (Image Docker et compose avec Tailscale)
 
 **Status:** ready-for-human
 
-- [ ] Une clé d'authentification Tailscale est créée et renseignée, et le nœud `plakar-ui` apparaît sur le tailnet.
+- [ ] Le nœud `plakar-ui` apparaît sur le tailnet, sans expiration de clé (connexion par URL : la ligne `TS_AUTHKEY` du compose est commentée, choix de Jobierre).
 - [ ] Les dossiers `appdata` sont préparés. La config Plakar n'est lisible que par le conteneur (droits `600`).
 - [ ] Les Stores sont ajoutés par des Commandes de Store depuis l'interface, et chacun obtient un premier Relevé réussi.
 - [ ] Le tableau de bord est accessible depuis le PC à `https://plakar-ui.<tailnet>.ts.net`.
