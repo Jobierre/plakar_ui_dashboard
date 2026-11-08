@@ -6,15 +6,19 @@
 
 **Blocked by:** 08 (Image Docker et compose avec Tailscale)
 
-**Status:** ready-for-human
+**Status:** resolved
 
-- [ ] Le nœud `plakar-ui` apparaît sur le tailnet, sans expiration de clé (connexion par URL : la ligne `TS_AUTHKEY` du compose est commentée, choix de Jobierre).
-- [ ] Les dossiers `appdata` sont préparés. La config Plakar n'est lisible que par le conteneur (droits `600`).
-- [ ] Les Stores sont ajoutés par des Commandes de Store depuis l'interface, et chacun obtient un premier Relevé réussi.
-- [ ] Le tableau de bord est accessible depuis le PC à `https://plakar-ui.<tailnet>.ts.net`.
-- [ ] Une Exploration s'ouvre depuis le PC sur `https://plakar-ui.<tailnet>.ts.net:<port>`.
-- [ ] Une identité Tailscale hors de la liste est refusée.
-- [ ] Depuis le LAN, sans passer par Tailscale, aucun port du service ne répond.
-- [ ] Le LXC Docker autorise `/dev/net/tun` : le sidecar tourne en mode TUN (voir spec, « Sécurité, mode TUN obligatoire »).
-- [ ] Depuis un autre nœud du tailnet, `http://plakar-ui:8080` et les ports internes `plakar ui` (9400-9420) ne répondent pas : seuls 443 et la plage d'Exploration, via `tailscale serve`, sont joignables.
-- [ ] La politique du tailnet n'ouvre vers plakar-ui que 443 et la plage d'Exploration (exemple dans `.env.example`).
+- [x] Le nœud `plakar-ui` apparaît sur le tailnet, sans expiration de clé (connexion par URL : la ligne `TS_AUTHKEY` du compose est commentée, choix de Jobierre).
+- [x] Les dossiers `appdata` sont préparés. La config Plakar n'est lisible que par le conteneur (droits `600`).
+- [x] Les Stores sont ajoutés par des Commandes de Store depuis l'interface, et chacun obtient un premier Relevé réussi.
+- [x] Le tableau de bord est accessible depuis le PC à `https://plakar-ui.<tailnet>.ts.net`.
+- [x] Une Exploration s'ouvre depuis le PC sur `https://plakar-ui.<tailnet>.ts.net:<port>`.
+- [x] Une identité Tailscale hors de la liste est refusée.
+- [x] Depuis le LAN, sans passer par Tailscale, aucun port du service ne répond.
+- [x] Le LXC Docker autorise `/dev/net/tun` : le sidecar tourne en mode TUN (voir spec, « Sécurité, mode TUN obligatoire »).
+- [x] Depuis un autre nœud du tailnet, `http://plakar-ui:8080` et les ports internes `plakar ui` (9400-9420) ne répondent pas : seuls 443 et la plage d'Exploration, via `tailscale serve`, sont joignables.
+- [x] La politique du tailnet n'ouvre vers plakar-ui que 443 et la plage d'Exploration (exemple dans `.env.example`).
+
+## Comments
+
+**2026-11-08 :** déploiement fait par Jobierre dans le LXC Docker avec `scripts/deploy-wizard.sh`. Il confirme que tout fonctionne.
