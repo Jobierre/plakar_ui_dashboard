@@ -227,7 +227,7 @@ func TestRetirerDuGroupeRefusesAStoreThatIsNotDisparu(t *testing.T) {
 	}
 }
 
-// compteurDisparus lit le compteur 👻 du bandeau, vide s'il n'y en a pas.
+// compteurDisparus lit le compteur 👻 du bandeau, vide s'il est absent.
 func compteurDisparus(t *testing.T, body string) string {
 	t.Helper()
 	el := findElement(t, body, func(n *html.Node) bool { v, _ := attr(n, "data-compteur"); return v == "disparu" })
@@ -241,8 +241,8 @@ func TestBandeauCountsStoresDisparusApartFromTheEtats(t *testing.T) {
 	svc, _ := troisStoresRanges(t, nil)
 	svc.creerGroupe("Hors site")
 	svc.ranger("immich", "Hors site")
-	if _, body := svc.get("/"); compteurDisparus(t, body) != "" {
-		t.Errorf("compteur 👻 affiché sans Store disparu")
+	if _, body := svc.get("/"); compteurDisparus(t, body) != "0" {
+		t.Errorf("compteur 👻 %q sans Store disparu, attendu 0", compteurDisparus(t, body))
 	}
 	svc.commande("store rm arr")
 
@@ -257,8 +257,8 @@ func TestBandeauCountsStoresDisparusApartFromTheEtats(t *testing.T) {
 	if _, body := svc.focus("Unraid"); compteurDisparus(t, body) != "1" {
 		t.Errorf("focus Unraid : compteur 👻 %q, attendu 1", compteurDisparus(t, body))
 	}
-	if _, body := svc.focus("Hors site"); compteurDisparus(t, body) != "" {
-		t.Errorf("focus Hors site : compteur 👻 %q, attendu aucun", compteurDisparus(t, body))
+	if _, body := svc.focus("Hors site"); compteurDisparus(t, body) != "0" {
+		t.Errorf("focus Hors site : compteur 👻 %q, attendu 0", compteurDisparus(t, body))
 	}
 }
 
@@ -298,8 +298,8 @@ func TestSupprimerLeGroupeForgetsItsStoresDisparus(t *testing.T) {
 	if got := rangement(groupes(t, body)); !equalRangement(got, want) {
 		t.Errorf("rangement %q, attendu %q", got, want)
 	}
-	if got := compteurDisparus(t, body); got != "" {
-		t.Errorf("compteur 👻 %q, attendu aucun", got)
+	if got := compteurDisparus(t, body); got != "0" {
+		t.Errorf("compteur 👻 %q, attendu 0", got)
 	}
 	// Revenu, arr est un Store nouveau, au Seuil par défaut.
 	svc.commande("plakar store add arr location=http://unraid:9880")
@@ -368,5 +368,24 @@ func TestRetirerDuGroupeIsForbiddenToAnUnknownIdentity(t *testing.T) {
 
 	if _, body := svc.get("/"); len(disparus(t, body)) != 1 {
 		t.Errorf("l'intrus a retiré arr")
+	}
+}
+
+func TestAStoreDisparuMovesUpAndDownInItsGroupe(t *testing.T) {
+	svc, _ := troisStoresRanges(t, nil)
+	_, body := svc.commande("store rm arr")
+	el := findElement(t, body, func(n *html.Node) bool { v, _ := attr(n, "data-store"); return v == "arr" })
+	want := []string{"/stores/arr/ordre haut disabled", "/stores/arr/ordre bas", "/stores/arr/retrait"}
+	if got := actions(el); !slices.Equal(got, want) {
+		t.Errorf("actions du Store disparu %q, attendu %q", got, want)
+	}
+
+	code, body := svc.deplacerStore("arr", "bas")
+
+	if code != http.StatusOK {
+		t.Fatalf("code %d\n%s", code, body)
+	}
+	if got := rangement(groupes(t, body))["Unraid"]; !slices.Equal(got, []string{"zeta", "arr"}) {
+		t.Errorf("Unraid %q, attendu zeta puis arr", got)
 	}
 }

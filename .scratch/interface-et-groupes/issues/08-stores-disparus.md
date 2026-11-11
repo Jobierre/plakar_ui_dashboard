@@ -18,5 +18,5 @@
 ## Comments
 
 - Implémenté : un membre de Groupe absent de la config est un Store disparu (`Entry.Disparu`) ; seul son Seuil est gardé, dans le fichier d'état. `POST /stores/<store>/retrait` (« Retirer du groupe ») l'oublie ; un Store de la config y est refusé (400), un nom inconnu aussi (404). Tout Seuil qui n'est plus ni à un Store ni à un Store disparu est oublié à chaque changement du rangement, avec annulation si l'enregistrement échoue.
-- Choix : le compteur 👻 du bandeau n'apparaît que s'il y a au moins un Store disparu dans la vue. Un Store disparu se déplace encore par ↑/↓ (sa place est la sienne), mais ne se range pas ailleurs.
+- Décidé (Jobierre) : le compteur 👻 du bandeau est toujours affiché, même à 0. Un Store disparu se déplace par ↑/↓ sur sa ligne (sa place est la sienne), mais ne se range pas dans un autre Groupe.
 - Le compteur 👻 en focus (reste ouvert du ticket 07) est fait.

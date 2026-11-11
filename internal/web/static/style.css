@@ -383,8 +383,8 @@ pre.terminal {
 .groupe-entete h2 a:hover { text-decoration: underline; }
 
 /* Store disparu : retiré de la config Plakar, il garde sa place, grisé, sans
-   État ni valeurs. Il n'a pas de dépliage : seul « Retirer du groupe » reste,
-   visible dans les deux vues. */
+   État ni valeurs. Il n'a pas de dépliage : ↑/↓ et « Retirer du groupe »
+   restent, visibles dans les deux vues. */
 .stores .disparu { opacity: .55; }
 .stores .disparu .ligne { cursor: default; }
 .stores .disparu .nom { text-decoration: line-through; }

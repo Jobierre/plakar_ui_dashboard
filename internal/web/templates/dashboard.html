@@ -18,9 +18,7 @@
 <li><span class="voyant {{.Voyant}}" aria-hidden="true"></span> <span data-compteur="{{.Voyant}}">{{.N}}</span> {{.Etat}}</li>
 {{- end}}
 </ul>
-{{- with .Disparus}}
-<p class="compteur-disparus" title="Stores retirés de la config Plakar, encore rangés dans un Groupe"><span aria-hidden="true">👻</span> <span data-compteur="disparu">{{.}}</span> Store{{if gt . 1}}s{{end}} supprimé{{if gt . 1}}s{{end}}</p>
-{{- end}}
+<p class="compteur-disparus" title="Stores retirés de la config Plakar, encore rangés dans un Groupe"><span aria-hidden="true">👻</span> <span data-compteur="disparu">{{.Disparus}}</span> Store{{if gt .Disparus 1}}s{{end}} supprimé{{if gt .Disparus 1}}s{{end}}</p>
 <details class="nouveau-groupe" data-nouveau-groupe{{with .Rangement}}{{if .Creation}} open{{end}}{{end}}>
 <summary>+ Groupe</summary>
 <form method="post" action="/groupes"><input name="nom" value="{{with .Rangement}}{{.Nom}}{{end}}" placeholder="Nom du Groupe" aria-label="Nom du nouveau Groupe" required> <button>Créer</button></form>
@@ -73,7 +71,7 @@
 <div class="ligne">
 <span class="c-etat etat"><span aria-hidden="true">👻</span></span>
 <span class="c-nom"><span class="nom">{{.Name}}</span><span class="mention" data-disparu-mention>Store supprimé</span></span>
-<span class="c-actions"><form method="post" action="/stores/{{chemin .Name}}/retrait"><button title="Oublier ce Store, Seuil compris">Retirer du groupe</button></form></span>
+<span class="c-actions"><form method="post" action="/stores/{{chemin .Name}}/ordre" class="ordre"><button name="sens" value="haut" aria-label="Monter {{.Name}}" title="Monter"{{if .Premier}} disabled{{end}}>↑</button><button name="sens" value="bas" aria-label="Descendre {{.Name}}" title="Descendre"{{if .Dernier}} disabled{{end}}>↓</button></form><form method="post" action="/stores/{{chemin .Name}}/retrait"><button title="Oublier ce Store, Seuil compris">Retirer du groupe</button></form></span>
 </div>
 </div>
 {{- else}}

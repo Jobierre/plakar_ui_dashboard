@@ -444,7 +444,8 @@ func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, v 
 		s.Rows = make([]row, 0, len(entries))
 		for _, e := range entries {
 			if e.Disparu {
-				// Ni État, ni valeurs : seulement sa place, et le ménage.
+				// Ni État, ni valeurs : seulement sa place, qu'il peut changer
+				// par ↑/↓, et le ménage.
 				s.Rows = append(s.Rows, row{Name: e.Name, Index: index, Disparu: true})
 				index++
 				s.disparus++
@@ -544,7 +545,8 @@ func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, v 
 	data := struct {
 		User      string
 		Compteurs []compteur
-		// Disparus compte les Stores disparus affichés : le ménage à faire.
+		// Disparus compte les Stores disparus affichés : le ménage à faire,
+		// affiché même à 0.
 		Disparus int
 		// ToutEnCours : chaque Store a déjà un Relevé en cours, « Tout
 		// relever » n'aurait rien à lancer.
