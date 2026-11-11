@@ -107,13 +107,15 @@ Un service léger, déployé en docker compose sur Unraid et accessible uniqueme
 64. En tant qu'Utilisateur autorisé, je veux un bandeau en haut de page qui compte les Stores par État, afin de savoir sans faire défiler s'il y a un problème.
 65. En tant qu'Utilisateur autorisé, je veux un bouton « Tout relever » dans le bandeau, qui lance un Relevé de chaque Store, sauf ceux dont le Relevé est déjà en cours, afin de tout vérifier après une série de backups.
 66. En tant qu'Utilisateur autorisé, je veux que la page se rafraîchisse seule toutes les 5 s tant qu'un Relevé est en cours, et plus du tout ensuite, afin de voir le résultat sans recharger à la main.
-67. En tant qu'Utilisateur autorisé, je veux une ligne compacte par Store (voyant et État, nom, âge du Dernier snapshot, taille et Écart, heure du dernier Relevé, ↻, Explorer ou lien et Arrêter), avec le reste dans un dépliage (date exacte, ID, durée et Écart, source, tags, Seuil de retard, message de port), afin que la page reste lisible.
+67. En tant qu'Utilisateur autorisé, je veux, dans la vue détaillée, une ligne compacte par Store (voyant et État, nom, âge du Dernier snapshot, taille et Écart, heure du dernier Relevé, ↻, Explorer ou lien et Arrêter), avec le reste dans un dépliage (date exacte, ID, durée et Écart, source, tags, Seuil de retard, message de port), afin que la page reste lisible.
 68. En tant qu'Utilisateur autorisé, je veux que l'erreur d'un Store Injoignable soit visible sans déplier, et que ses dernières valeurs connues soient atténuées, afin de savoir qu'elles sont anciennes.
 69. En tant qu'Utilisateur autorisé, je veux que le dépliage d'un Store s'ouvre seul quand une action sur ce Store vient d'échouer (Seuil, Exploration), afin de voir l'erreur.
 70. En tant qu'Utilisateur autorisé, je veux voir l'Écart en texte neutre, signé, avec une flèche ↑/↓ et la valeur du Snapshot précédent en infobulle, sans couleur d'alerte, afin de ne pas le confondre avec l'État.
 71. En tant qu'Utilisateur autorisé, je veux que la Commande de Store soit rangée dans une section repliable « Gérer les Stores », ouverte d'elle-même quand un résultat s'affiche, afin qu'elle n'encombre pas le tableau de bord.
 72. En tant qu'Utilisateur autorisé, je veux une mise en page pensée pour l'écran du Mac, qui s'empile proprement sur un écran étroit (moins de 700 px), afin de pouvoir aussi consulter depuis un téléphone.
 73. En tant qu'Utilisateur autorisé, je veux un thème clair et un thème sombre qui suivent le réglage du système, afin de consulter confortablement le soir.
+89. En tant qu'Utilisateur autorisé, je veux une vue simple, en tuiles (bordure à la couleur de l'État, nom, âge du Dernier snapshot en gros, État, taille et Écart, erreur éventuelle), dont un clic ouvre un tiroir latéral avec tous les détails et les actions, afin de faire mon contrôle quotidien d'un coup d'œil.
+90. En tant qu'Utilisateur autorisé, je veux basculer entre la vue simple et la vue détaillée depuis le bandeau, avec la vue simple par défaut et mon choix retenu par le navigateur, afin d'avoir le contrôle rapide d'abord et le détail quand j'en ai besoin.
 
 ### Groupes (ticket 11)
 
@@ -121,7 +123,7 @@ Un service léger, déployé en docker compose sur Unraid et accessible uniqueme
 75. En tant qu'Utilisateur autorisé, je veux créer un Groupe (« + Groupe » dans le bandeau), le renommer et le supprimer, avec des noms uniques, afin de gérer mon rangement depuis l'interface.
 76. En tant qu'Utilisateur autorisé, je veux que supprimer un Groupe, après confirmation, renvoie ses Stores dans « Sans groupe » et efface ses Stores disparus, sans jamais toucher à la config Plakar, afin que le rangement reste sans risque.
 77. En tant qu'Utilisateur autorisé, je veux déplacer un Store d'un Groupe à l'autre et changer son ordre par glisser-déposer, afin de ranger vite.
-78. En tant qu'Utilisateur autorisé, je veux réordonner les Groupes en glissant leur en-tête par sa poignée, « Sans groupe » restant toujours en dernier, afin de mettre en haut ce qui compte.
+78. En tant qu'Utilisateur autorisé, je veux réordonner les Groupes en glissant leur en-tête par sa poignée (sections dans la vue détaillée, colonnes dans la vue simple), « Sans groupe » restant toujours en dernier, afin de mettre en haut ce qui compte.
 79. En tant qu'Utilisateur autorisé, je veux pouvoir faire tout cela sans JavaScript (liste déroulante « Groupe » et boutons ↑/↓ dans le dépliage), afin que le glisser-déposer reste un confort.
 80. En tant qu'Utilisateur autorisé, je veux qu'un Store nouvellement apparu aille en fin de « Sans groupe », et que « Sans groupe » ne s'affiche que s'il contient au moins un Store, afin de repérer ce qui reste à ranger.
 81. En tant qu'Utilisateur autorisé, je veux que l'en-tête de chaque Groupe montre le voyant du pire État de ses Stores et ses compteurs, et qu'il se replie (état gardé par le navigateur), afin de condenser ce qui va bien.
@@ -148,7 +150,9 @@ Un service léger, déployé en docker compose sur Unraid et accessible uniqueme
 ### Interface (décidée le 2026-11-11)
 - Rendu côté serveur par les templates Go, comme avant : mêmes routes `POST` avec redirection vers la page, et mêmes attributs `data-store`, `data-field`, `data-commande`, qui restent le contrat des tests. Si l'interface grossit trop, on passera à une application front séparée sur une API JSON. Garder les routes et les attributs facilite ce passage.
 - Une feuille CSS écrite à la main, intégrée au binaire. Aucun framework, aucun CDN, aucune étape de build.
-- **Aucun JavaScript obligatoire** : tout fonctionne par formulaires. Un petit fichier JS fait main, intégré au binaire, ajoute seulement le glisser-déposer des Groupes (API HTML5 native, un `POST` puis rechargement) et retient l'état replié des Groupes (`localStorage`).
+- **JavaScript autorisé là où il simplifie** (décision de Jobierre du 2026-11-11, qui assouplit le « aucun JS obligatoire » initial) : un petit fichier JS fait main, intégré au binaire, sans bibliothèque. Il gère la bascule entre vue simple et vue détaillée et le tiroir de la vue simple, le glisser-déposer des Groupes (API HTML5 native, un `POST` puis rechargement) et les choix retenus par le navigateur (vue, Groupes repliés, dans `localStorage`). Les actions sur le service restent des formulaires `POST`, et le JS n'insère jamais un nom de Store ou de Groupe comme du HTML (`textContent`, jamais `innerHTML`).
+- Les deux vues partagent si possible le même balisage, et seule une classe CSS change de mise en page. Chaque Store n'apparaît alors qu'une fois dans la page, et les attributs `data-*` des tests restent uniques. Le tiroir de la vue simple est le dépliage du Store, présenté en panneau latéral.
+- Prototype de référence : branche `prototype/ui-variantes`, fichier `internal/web/prototype/ui-variantes.html`, variante D (jamais fusionnée dans main).
 - Le rafraîchissement pendant un Relevé en cours passe par `<meta http-equiv="refresh">`, émis seulement dans ce cas.
 - Nouvelle route `POST /releves` (Tout relever, ou Relever le groupe en focus).
 - Les Groupes, leur ordre, l'ordre des Stores et les Stores disparus sont de l'état propre au service, persisté de façon atomique dans le fichier d'état avec le reste. Un Store disparu garde son Groupe, sa place et son Seuil de retard, mais perd son port et son dernier Relevé.
@@ -196,7 +200,7 @@ Les champs sont : date RFC 3339 en UTC, ID court, taille (valeur + unité binair
   Ce seam couvre la lecture des lignes, l'Écart, l'État, l'attribution et la stabilité des ports, la liste blanche et les refus de la Commande de Store, l'absence de journalisation des commandes, le cycle de vie des Explorations et la vérification d'identité.
 - **Test de contrat avec le vrai `plakar`**, dans la version figée de l'image. Il crée un Kloset jetable dans un dossier temporaire, fait deux backups d'un petit dossier, puis vérifie que le service relève correctement le Dernier snapshot, le Snapshot précédent et l'Écart. Il échoue si une montée de version de Plakar change le format de sortie.
 - Les Groupes, les Stores disparus, le focus et « Tout relever » se testent par le même seam HTTP, en passant par les formulaires sans JS.
-- **Non testés automatiquement** : `tailscale serve`, le compose, le JavaScript (glisser-déposer, repli) et le rendu visuel au-delà de « la bonne valeur dans la bonne ligne ». Ils sont vérifiés à la main au déploiement.
+- **Non testés automatiquement** : `tailscale serve`, le compose, le JavaScript (bascule de vue, tiroir, glisser-déposer, repli) et le rendu visuel au-delà de « la bonne valeur dans la bonne ligne ». Ils sont vérifiés à la main au déploiement.
 - **Prior art** : aucun. Le dépôt ne contient encore aucun code.
 
 ## Out of Scope
