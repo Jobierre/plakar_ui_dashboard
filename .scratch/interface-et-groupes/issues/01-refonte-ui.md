@@ -1,6 +1,6 @@
-# 10: Refonte de l'interface
+# 01: Refonte de l'interface
 
-**What to build:** Le tableau de bord en HTML brut (21 colonnes, sans CSS) devient une interface lisible sur l'écran du Mac : une ligne compacte par Store avec un voyant d'État, un bandeau de résumé avec « Tout relever », un dépliage pour les détails et la Commande de Store rangée dans une section repliable. Deux vues au choix, simple (tuiles, par défaut) et détaillée (liste dense). Rendu côté serveur, CSS et petit JS faits main intégrés au binaire (spec : stories 63 à 73, 89 et 90, « Interface (décidée le 2026-11-11) »).
+**What to build:** Le tableau de bord en HTML brut (21 colonnes, sans CSS) devient une interface lisible sur l'écran du Mac : une ligne compacte par Store avec un voyant d'État, un bandeau de résumé avec « Tout relever », un dépliage pour les détails et la Commande de Store rangée dans une section repliable. Deux vues au choix, simple (tuiles, par défaut) et détaillée (liste dense). Rendu côté serveur, CSS et petit JS faits main intégrés au binaire (spec : `.scratch/interface-et-groupes/spec.md`, stories 1 à 30 et 67 à 69).
 
 **Prototype de référence :** branche `prototype/ui-variantes`, `open "internal/web/prototype/ui-variantes.html?variant=D"`. Le verdict est dans les Comments.
 

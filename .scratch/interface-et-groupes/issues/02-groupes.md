@@ -1,8 +1,8 @@
-# 11: Groupes
+# 02: Groupes
 
-**What to build:** Jobierre range ses Stores dans des Groupes nommés, dans l'ordre qu'il veut, par glisser-déposer ou par formulaires sans JS. Un Groupe peut s'ouvrir en focus. Un Store retiré de la config alors qu'il était rangé reste à sa place comme Store disparu, jusqu'à ce qu'on le retire du Groupe ou qu'il réapparaisse (spec : stories 74 à 88, glossaire : Groupe, Store disparu).
+**What to build:** Jobierre range ses Stores dans des Groupes nommés, dans l'ordre qu'il veut, par glisser-déposer ou par formulaires sans JS. Un Groupe peut s'ouvrir en focus. Un Store retiré de la config alors qu'il était rangé reste à sa place comme Store disparu, jusqu'à ce qu'on le retire du Groupe ou qu'il réapparaisse (spec : `.scratch/interface-et-groupes/spec.md`, stories 31 à 66 et 70 ; glossaire : Groupe, Store disparu).
 
-**Blocked by:** 10 (Refonte de l'interface)
+**Blocked by:** 01 (Refonte de l'interface)
 
 **Status:** ready-for-agent
 
@@ -18,6 +18,10 @@
 - [ ] Un Store « Sans groupe » retiré disparaît simplement.
 - [ ] Le bandeau ajoute un compteur 👻 des Stores disparus, hors des compteurs d'État ; « Tout relever » les ignore.
 - [ ] Un clic sur le nom d'un Groupe ouvre `/?groupe=<nom>` : seul ce Groupe s'affiche, avec « ← Tous les groupes ». Tout le bandeau (compteurs, 👻, bouton « Relever le groupe ») ne porte que sur les Stores du Groupe.
+- [ ] Un fichier d'état de la version actuelle (sans Groupes) se charge sans erreur : aucun Groupe, tous les Stores dans « Sans groupe » par ordre de nom.
+- [ ] Le Catalogue ne jette plus l'état d'un Store absent de la config s'il est membre d'un Groupe : son Seuil est gardé, son port libéré, son Relevé oublié. Un Store « Sans groupe » absent est oublié comme avant.
+- [ ] Le focus d'un Groupe inconnu (renommé, supprimé, adresse fausse) affiche un message et le lien « ← Tous les groupes ». Une action sur un Groupe ou un Store inconnu, ou un nom refusé, renvoie à la page avec un message, sans rien modifier.
+- [ ] L'Accès refuse chaque nouvelle action à une identité hors de la liste.
 - [ ] Tests par le seam HTTP, via les formulaires : création, renommage, suppression, déplacement et ordre, Store disparu (`rm` puis `add`), focus et « Relever le groupe ».
 
 ## Comments
