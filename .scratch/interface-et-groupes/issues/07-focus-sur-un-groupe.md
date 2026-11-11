@@ -16,4 +16,5 @@
 ## Comments
 
 - Implémenté : `/?groupe=<nom>` (ou `_sans`) filtre les sections et le bandeau ; `POST /releve` accepte `groupe` et revient sur le focus ; `Catalogue.Membres` donne les Stores d'un Groupe. Sur un focus inconnu, le bouton du bandeau est masqué.
-- Reste ouvert : les autres actions faites en focus (Seuil, ↻, rangement, ordre, renommage) redirigent vers `/` et perdent le focus. Le compteur 👻 (ticket 08) devra être filtré par le focus.
+- Décidé (domain-modeling) : le Focus est une page de consultation. Les autres actions faites en focus (Seuil, ↻, rangement, ordre, renommage) ramènent volontairement à `/`. Les libellés « Relever le groupe » et « ← Tous les groupes » gardent la minuscule.
+- Reste ouvert : le compteur 👻 (ticket 08) devra être filtré par le focus.
