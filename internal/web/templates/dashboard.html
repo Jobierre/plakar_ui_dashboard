@@ -17,60 +17,75 @@
 <p class="utilisateur">Connecté en tant que <span id="utilisateur">{{.User}}</span></p>
 </header>
 <main>
-<h2>Stores</h2>
-<table class="stores">
-<thead>
-<tr><th>Store</th><th>Dernier Relevé</th><th></th><th></th><th>État</th><th>Seuil de retard</th><th></th><th></th><th>Dernier snapshot</th><th>Âge</th><th>ID</th><th>Taille</th><th>Écart de taille</th><th>Durée</th><th>Écart de durée</th><th>Source</th><th>Tags</th><th>Erreur</th><th>Exploration</th><th></th><th></th></tr>
-</thead>
-<tbody>
-{{- range .Rows}}
-<tr data-store="{{.Name}}"{{if .Pending}} data-pending{{end}}>
-<td data-field="name">{{.Name}}</td>
-<td data-field="releve">{{.ReleveAt}}</td>
-<td data-field="releve-en-cours">{{if .EnCours}}Relevé en cours{{end}}</td>
-<td><form method="post" action="/stores/{{.Name}}/releve"><button aria-label="Relever {{.Name}} maintenant" title="Relever maintenant"{{if .EnCours}} disabled{{end}}>↻</button></form></td>
-<td><span class="etat">{{with .Voyant}}<span class="voyant {{.}}" data-field="voyant" data-etat="{{.}}" aria-hidden="true"></span> {{end}}<span data-field="etat">{{.Etat}}</span></span></td>
-<td data-field="seuil">{{.Seuil}}</td>
-<td><form method="post" action="/stores/{{.Name}}/seuil"><input name="seuil" value="{{.SeuilInput}}" placeholder="par défaut" aria-label="Seuil de retard de {{.Name}}" size="6"> <button>Modifier</button></form></td>
-<td data-field="seuil-error">{{.SeuilError}}</td>
+<section class="stores" aria-label="Stores">
+<div class="entete" aria-hidden="true"><span>État</span><span>Store</span><span>Dernier snapshot</span><span>Taille</span><span>Écart</span><span>Relevé</span><span></span></div>
+{{- range $i, $r := .Rows}}
+<details class="store{{if .Perime}} perime{{end}}" data-store="{{.Name}}"{{if .Pending}} data-pending{{end}}{{if .Open}} open{{end}}>
+<summary class="ligne" data-ligne>
+<span class="c-etat etat">{{with .Voyant}}<span class="voyant {{.}}" data-field="voyant" data-etat="{{.}}" aria-hidden="true"></span> {{end}}<span data-field="etat">{{.Etat}}</span></span>
+<span class="c-nom"><span class="nom" data-field="name">{{.Name}}</span>{{with .Error}}<span class="erreur" data-field="error">{{.}}</span>{{end}}</span>
 {{- with .Latest}}
-<td data-field="date">{{.Date}}</td>
-<td data-field="age">{{.Age}}</td>
-<td data-field="id">{{.ID}}</td>
-<td data-field="size">{{.Size}}</td>
-<td data-field="size-ecart"{{with .Previous}} title="{{.}}"{{end}}>{{.SizeEcart}}</td>
-<td data-field="duration">{{.Duration}}</td>
-<td data-field="duration-ecart"{{with .Previous}} title="{{.}}"{{end}}>{{.DurationEcart}}</td>
-<td data-field="path">{{.Path}}</td>
-<td data-field="tags">{{.Tags}}</td>
+<span class="c-age valeur" data-field="age" title="{{.Date}}">{{.Age}}</span>
+<span class="c-taille valeur" data-field="size">{{.Size}}</span>
+<span class="c-ecart valeur">{{with .SizeEcart}}{{template "ecart" ecartDe "size-ecart" . $r.Latest.Previous}}{{end}}</span>
 {{- else}}
-<td data-field="latest" colspan="9">{{.Message}}</td>
+<span class="c-snapshot" data-field="latest">{{.Message}}</span>
 {{- end}}
-<td data-field="error" class="erreur">{{.Error}}</td>
-<td data-field="exploration">{{with .Exploration}}<a href="{{.}}" target="_blank" rel="noopener noreferrer">{{.}}</a>{{end}}</td>
-<td>{{if .PortMessage}}<span data-field="port-message">{{.PortMessage}}</span>{{else}}<form method="post" action="/stores/{{.Name}}/exploration"><button>Explorer</button></form>{{end}}{{if .Exploration}} <form method="post" action="/stores/{{.Name}}/exploration/arret"><button>Arrêter</button></form>{{end}}</td>
-<td data-field="exploration-error">{{.ExplorationError}}</td>
-</tr>
+<span class="c-releve">{{if .EnCours}}<span data-field="releve-en-cours">Relevé en cours</span>{{else}}<span data-field="releve-heure"{{with .ReleveAt}} title="{{.}}"{{end}}>{{.ReleveHeure}}</span>{{end}}</span>
+<span class="c-actions">
+<button form="releve-{{$i}}" aria-label="Relever {{.Name}} maintenant" title="Relever maintenant"{{if .EnCours}} disabled{{end}}>↻</button>
+{{- if .Exploration}}
+<a data-field="exploration" class="exploration" href="{{.Exploration}}" target="_blank" rel="noopener noreferrer" title="Ouvrir l'Exploration">{{.Exploration}}</a>
+<button form="arret-{{$i}}">Arrêter</button>
+{{- else if not .PortMessage}}
+<button form="explorer-{{$i}}">Explorer</button>
 {{- end}}
-</tbody>
-</table>
-<section class="gerer">
-<h2>Commande de Store</h2>
-<form method="post" action="/commande">
-<input name="commande" size="80" autocomplete="off" spellcheck="false" placeholder="plakar store add …" aria-label="Commande de Store">
+</span>
+</summary>
+<form id="releve-{{$i}}" method="post" action="/stores/{{.Name}}/releve"></form>
+<form id="explorer-{{$i}}" method="post" action="/stores/{{.Name}}/exploration"></form>
+<form id="arret-{{$i}}" method="post" action="/stores/{{.Name}}/exploration/arret"></form>
+<div class="depliage" data-depliage>
+<dl class="kv">
+{{- with .Latest}}
+<dt>Dernier snapshot</dt><dd class="valeur" data-field="date">{{.Date}}</dd>
+<dt>ID</dt><dd class="mono valeur" data-field="id">{{.ID}}</dd>
+<dt>Durée</dt><dd class="valeur"><span data-field="duration">{{.Duration}}</span>{{with .DurationEcart}} {{template "ecart" ecartDe "duration-ecart" . $r.Latest.Previous}}{{end}}</dd>
+<dt>Source</dt><dd class="mono valeur" data-field="path">{{.Path}}</dd>
+<dt>Tags</dt><dd class="valeur" data-field="tags">{{.Tags}}</dd>
+{{- end}}
+<dt>Dernier Relevé</dt><dd data-field="releve">{{.ReleveAt}}</dd>
+<dt>Seuil de retard</dt><dd><span data-field="seuil">{{.Seuil}}</span>
+<form method="post" action="/stores/{{.Name}}/seuil"><input name="seuil" value="{{.SeuilInput}}" placeholder="par défaut" aria-label="Seuil de retard de {{.Name}}" size="6"> <button>Modifier</button></form>
+<span class="erreur" data-field="seuil-error">{{.SeuilError}}</span></dd>
+{{- with .PortMessage}}
+<dt>Exploration</dt><dd class="erreur" data-field="port-message">{{.}}</dd>
+{{- end}}
+{{- with .ExplorationError}}
+<dt>Exploration</dt><dd class="erreur" data-field="exploration-error">{{.}}</dd>
+{{- end}}
+</dl>
+</div>
+</details>
+{{- end}}
+</section>
+<details class="gerer" data-gerer{{if .Commande}} open{{end}}>
+<summary>Gérer les Stores</summary>
+<form method="post" action="/commande" class="commande">
+<input name="commande" class="mono" autocomplete="off" spellcheck="false" placeholder="plakar store add …" aria-label="Commande de Store">
 <button>Exécuter</button>
 </form>
-<p>Commandes acceptées : <code>plakar store add | set | unset | rm | show</code> (sans <code>-secrets</code>). La commande n'est jamais conservée.</p>
+<p class="aide">Commandes acceptées : <code>plakar store add | set | unset | rm | show</code> (sans <code>-secrets</code>). La commande n'est jamais conservée.</p>
 {{- with .Commande}}
 <section id="commande-resultat">
 {{- with .Refus}}
-<p data-commande="refus">{{.}}</p>
+<p class="erreur" data-commande="refus">{{.}}</p>
 {{- end}}
 {{- with .Erreur}}
-<p data-commande="erreur">{{.}}</p>
+<p class="erreur" data-commande="erreur">{{.}}</p>
 {{- end}}
 {{- with .Sortie}}
-<p>Code de retour : <span data-commande="code">{{.Code}}</span></p>
+<p>Code de retour : <b data-commande="code">{{.Code}}</b></p>
 <h3>Sortie standard</h3>
 <pre class="terminal" data-commande="stdout">{{.Stdout}}</pre>
 <h3>Sortie d'erreur</h3>
@@ -78,7 +93,8 @@
 {{- end}}
 </section>
 {{- end}}
-</section>
+</details>
 </main>
 </body>
 </html>
+{{- define "ecart"}}<span class="ecart"><span aria-hidden="true" data-field="{{.Field}}-sens">{{.Ecart.Sens}}</span> <span data-field="{{.Field}}" title="{{.Previous}}">{{.Ecart.Texte}}</span></span>{{end}}

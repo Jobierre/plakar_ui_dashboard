@@ -4,16 +4,18 @@
 
 **Blocked by:** 01 (Feuille de style, voyant et bandeau)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Ligne repliée : voyant et État, nom, âge du Dernier snapshot, taille et Écart de taille, heure du dernier Relevé ou « Relevé en cours », ↻, Explorer ou lien d'Exploration et Arrêter.
-- [ ] Dépliage : date exacte, ID court, durée et Écart de durée, chemin source, tags, Seuil de retard avec son formulaire, message de port.
-- [ ] Le dépliage d'un Store s'ouvre de lui-même après une erreur de Seuil ou d'Exploration sur ce Store.
-- [ ] L'erreur d'un Store Injoignable est visible dans la ligne repliée ; ses dernières valeurs connues sont atténuées.
-- [ ] L'Écart est en texte neutre et signé, avec ↑, ↓ ou →, la valeur du Snapshot précédent en infobulle, et aucune couleur d'alerte.
-- [ ] La Commande de Store est dans une section « Gérer les Stores », fermée par défaut et ouverte d'elle-même quand un résultat s'affiche ; stdout et stderr en blocs façon terminal.
-- [ ] Sous 700 px de large, chaque ligne s'empile en carte.
-- [ ] Chaque Store n'apparaît qu'une fois dans la page.
-- [ ] Tests par le seam HTTP : contenu de la ligne et du dépliage par `data-field`, dépliage ouvert après une erreur de Seuil, section « Gérer les Stores » ouverte après une Commande de Store, unicité de chaque Store.
+- [x] Ligne repliée : voyant et État, nom, âge du Dernier snapshot, taille et Écart de taille, heure du dernier Relevé ou « Relevé en cours », ↻, Explorer ou lien d'Exploration et Arrêter.
+- [x] Dépliage : date exacte, ID court, durée et Écart de durée, chemin source, tags, Seuil de retard avec son formulaire, message de port.
+- [x] Le dépliage d'un Store s'ouvre de lui-même après une erreur de Seuil ou d'Exploration sur ce Store.
+- [x] L'erreur d'un Store Injoignable est visible dans la ligne repliée ; ses dernières valeurs connues sont atténuées.
+- [x] L'Écart est en texte neutre et signé, avec ↑, ↓ ou →, la valeur du Snapshot précédent en infobulle, et aucune couleur d'alerte.
+- [x] La Commande de Store est dans une section « Gérer les Stores », fermée par défaut et ouverte d'elle-même quand un résultat s'affiche ; stdout et stderr en blocs façon terminal.
+- [x] Sous 700 px de large, chaque ligne s'empile en carte.
+- [x] Chaque Store n'apparaît qu'une fois dans la page.
+- [x] Tests par le seam HTTP : contenu de la ligne et du dépliage par `data-field`, dépliage ouvert après une erreur de Seuil, section « Gérer les Stores » ouverte après une Commande de Store, unicité de chaque Store.
 
 ## Comments
+
+**2026-11-11 :** implémenté. Chaque Store est un `<details>` : la ligne repliée est son `<summary>`, le dépliage le reste. Les boutons de la ligne (↻, Explorer, Arrêter) y sont rattachés par l'attribut `form="…"` à des formulaires vides placés juste après, car un `<form>` ne peut pas vivre dans un `<summary>` ; tout marche sans JavaScript. La ligne montre l'heure seule du dernier Relevé (`data-field="releve-heure"`, date complète en infobulle). La date complète (`releve`) est dans le dépliage, lisible même pendant un Relevé en cours. Le lien d'Exploration garde l'URL comme texte (les tests la lisent là), tronqué par la CSS : le prototype affichait « Ouvrir ↗ », à revoir si ça gêne. L'atténuation d'un Store Injoignable porte sur la ligne et le dépliage. Rendu vérifié dans Chrome : clair à 1300 px, sombre à 390 px (empilement en carte), section « Gérer les Stores » ouverte sur un résultat. Limite connue : boutons et lien dans un `<summary>` forment du contenu interactif imbriqué, comme dans le prototype, et un lecteur d'écran peut les aplatir.

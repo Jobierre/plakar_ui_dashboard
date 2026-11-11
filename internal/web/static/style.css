@@ -106,34 +106,69 @@ form { display: inline; margin: 0; }
 main { max-width: 1400px; margin: 18px auto; padding: 0 18px; }
 main h2 { font-size: 15px; }
 
-/* Tableau des Stores. */
+.mono { font-family: var(--mono); font-size: 12.5px; }
+.erreur { color: var(--erreur); font-size: 12.5px; }
+
+/* Vue détaillée : une ligne compacte par Store, un dépliage pour le reste. */
 .stores {
-  display: block;
-  overflow-x: auto;
-  border-collapse: collapse;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  overflow: hidden;
 }
-.stores th, .stores td {
-  padding: 7px 10px;
+.stores .entete,
+.stores .ligne {
+  display: grid;
+  grid-template-columns: 130px minmax(150px, 1.4fr) 110px 90px 90px 120px minmax(150px, auto);
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
   border-bottom: 1px solid var(--line);
-  text-align: left;
-  white-space: nowrap;
 }
-.stores th {
+.stores .entete {
   font-size: 11.5px;
-  font-weight: 500;
   text-transform: uppercase;
   letter-spacing: .04em;
   color: var(--muted);
   background: var(--panel2);
+  padding-top: 5px;
+  padding-bottom: 5px;
 }
-.stores tbody tr:last-child td { border-bottom: 0; }
-.stores [data-field="name"] { font-weight: 600; }
-.erreur { color: var(--erreur); font-size: 12.5px; white-space: normal; }
+.stores details.store:last-child > .ligne,
+.stores details.store:last-child > .depliage { border-bottom: 0; }
+.stores .ligne { list-style: none; cursor: pointer; }
+.stores .ligne::-webkit-details-marker { display: none; }
+.stores .ligne:hover { background: color-mix(in srgb, var(--accent) 4%, transparent); }
+.stores details[open] > .ligne { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.stores .nom { font-weight: 600; }
+.stores .c-nom { min-width: 0; }
+.stores .c-nom .erreur { display: block; overflow-wrap: anywhere; }
+.stores .c-snapshot { grid-column: span 3; color: var(--muted); }
+.stores .c-releve { color: var(--muted); white-space: nowrap; }
+.stores .c-actions { display: flex; align-items: center; gap: 6px; justify-content: flex-end; min-width: 0; }
+.stores .exploration {
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Les dernières valeurs connues d'un Store Injoignable sont anciennes. */
+.stores .perime .valeur { opacity: .5; }
+/* L'Écart est une information, jamais une alerte : texte neutre. */
+.ecart { color: var(--muted); white-space: nowrap; }
 
-/* Commande de Store. */
+.stores .depliage {
+  padding: 10px 12px 14px 24px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 5px 14px; margin: 0; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; overflow-wrap: anywhere; }
+.kv dd form { margin-left: 8px; }
+.kv dd .erreur { margin-left: 8px; }
+
+/* Gérer les Stores : la Commande de Store, rangée tant qu'on ne s'en sert pas. */
 .gerer {
   margin-top: 22px;
   padding: 10px 16px;
@@ -141,9 +176,15 @@ main h2 { font-size: 15px; }
   border: 1px solid var(--line);
   border-radius: var(--radius);
 }
+.gerer > summary { cursor: pointer; font-weight: 600; }
+.gerer .commande { display: flex; gap: 8px; margin-top: 10px; }
+.gerer .commande input { flex: 1; min-width: 0; }
+.gerer .aide { font-size: 12.5px; color: var(--muted); }
+.gerer h3 { font-size: 12px; font-weight: 500; color: var(--muted); margin: 10px 0 0; }
 pre.terminal {
   margin: 6px 0;
   padding: 10px 12px;
+  min-height: 2.6em;
   overflow: auto;
   background: var(--term);
   color: var(--termfg);
@@ -155,4 +196,22 @@ pre.terminal {
   .bandeau { padding: 10px 14px; gap: 10px; }
   .bandeau .utilisateur { margin-left: 0; }
   main { padding: 0 10px; }
+  /* Chaque ligne s'empile en carte. */
+  .stores .entete { display: none; }
+  .stores .ligne {
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "nom actions" "etat releve" "age taille" "ecart ecart";
+    row-gap: 4px;
+  }
+  .stores .c-nom { grid-area: nom; }
+  .stores .c-etat { grid-area: etat; }
+  .stores .c-actions { grid-area: actions; }
+  .stores .c-releve { grid-area: releve; justify-self: end; }
+  .stores .c-age { grid-area: age; }
+  .stores .c-taille { grid-area: taille; justify-self: end; }
+  .stores .c-ecart { grid-area: ecart; }
+  .stores .c-snapshot { grid-column: 1 / -1; }
+  .stores .depliage { padding-left: 12px; }
+  .kv { grid-template-columns: 1fr; }
+  .kv dt { margin-top: 4px; }
 }

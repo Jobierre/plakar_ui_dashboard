@@ -30,7 +30,16 @@ var templates embed.FS
 //go:embed static
 var static embed.FS
 
-var page = template.Must(template.ParseFS(templates, "templates/dashboard.html"))
+var page = template.Must(template.New("dashboard.html").Funcs(template.FuncMap{
+	// ecartDe prépare le bloc « ecart » : un Écart, le champ qui le nomme et
+	// la description du Snapshot précédent, en infobulle.
+	"ecartDe": func(field string, e *ecart, previous string) any {
+		return struct {
+			Field, Previous string
+			Ecart           *ecart
+		}{field, previous, e}
+	},
+}).ParseFS(templates, "templates/dashboard.html"))
 
 // Dashboard est le tableau de bord et ce dont il a besoin.
 type Dashboard struct {
@@ -194,11 +203,15 @@ func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, v 
 		if line.etat != nil {
 			parEtat[*line.etat]++
 		}
+		// Le dépliage d'un Store s'ouvre de lui-même sur l'action qui vient d'y
+		// échouer.
 		if v.seuil != nil && v.seuil.store == e.Name {
 			line.SeuilInput, line.SeuilError = v.seuil.text, v.seuil.err
+			line.Open = true
 		}
 		if v.exploration != nil && v.exploration.store == e.Name {
 			line.ExplorationError = v.exploration.err
+			line.Open = true
 		}
 		rows = append(rows, line)
 	}
@@ -226,6 +239,12 @@ type row struct {
 	// l'heure du dernier Relevé terminé, vide s'il n'y en a pas.
 	EnCours  bool
 	ReleveAt string
+	// ReleveHeure est l'heure seule du dernier Relevé terminé, pour la ligne
+	// repliée.
+	ReleveHeure string
+	// Open ouvre le dépliage du Store : une action sur ce Store vient
+	// d'échouer.
+	Open bool
 	// Etat est le mot de l'État, « Premier Relevé » tant qu'aucun Relevé
 	// n'est terminé ; Voyant est la couleur qui l'accompagne, vide sans État.
 	Etat, Voyant string
@@ -239,6 +258,9 @@ type row struct {
 	Message string
 	// Error est le message d'erreur du dernier Relevé, s'il a échoué.
 	Error string
+	// Perime : le Store est Injoignable, ses valeurs affichées sont les
+	// dernières connues, à atténuer.
+	Perime bool
 	// Exploration est le lien de l'Exploration en cours, vide sans
 	// Exploration ; PortMessage remplace le bouton « Explorer » d'un Store
 	// sans port ; ExplorationError explique l'échec d'un lancement.
@@ -248,11 +270,14 @@ type row struct {
 // dateLayout est le format des dates affichées, en heure locale.
 const dateLayout = "2006-01-02 15:04"
 
+// heureLayout est le format de l'heure seule, en heure locale.
+const heureLayout = "15:04"
+
 // snapshot est le Dernier snapshot d'une ligne, mis en forme, avec l'Écart
 // (vide sans Snapshot précédent).
 type snapshot struct {
 	Date, Age, ID, Size, Duration, Path, Tags string
-	SizeEcart, DurationEcart                  string
+	SizeEcart, DurationEcart                  *ecart
 	// Previous décrit le Snapshot précédent, auquel l'Écart compare.
 	Previous string
 }
@@ -272,7 +297,8 @@ func (c Dashboard) newRow(e catalogue.Entry, now time.Time) row {
 	if e.Releve != nil {
 		st := etat.Of(e.Releve.Latest, seuil, now, e.Releve.Err)
 		r.Etat, r.Voyant, r.etat = st.String(), voyant(st), &st
-		r.ReleveAt = e.Releve.At.In(c.Location).Format(dateLayout)
+		at := e.Releve.At.In(c.Location)
+		r.ReleveAt, r.ReleveHeure = at.Format(dateLayout), at.Format(heureLayout)
 	}
 	switch {
 	case e.Releve == nil:
@@ -292,6 +318,7 @@ func (c Dashboard) newRow(e catalogue.Entry, now time.Time) row {
 		r.Message = "Aucun snapshot"
 		return r
 	}
+	r.Perime = e.Releve.Err != nil
 	s := e.Releve.Latest
 	r.Latest = &snapshot{
 		Date:     s.Date.In(c.Location).Format(dateLayout),
@@ -305,8 +332,10 @@ func (c Dashboard) newRow(e catalogue.Entry, now time.Time) row {
 	// Le Relevé ne produit un Écart qu'avec un Snapshot précédent.
 	if ec, p := e.Releve.Ecart, e.Releve.Previous; ec != nil {
 		r.Latest.Previous = fmt.Sprintf("par rapport au Snapshot précédent %s (%s, %s)", p.ID, p.Size.Text, p.Duration)
-		r.Latest.SizeEcart = sizeEcart(*ec)
-		r.Latest.DurationEcart = signed(cmp.Compare(ec.Duration, 0), ec.Duration.Abs().String())
+		size := sizeEcart(*ec)
+		sign := cmp.Compare(ec.Duration, 0)
+		r.Latest.SizeEcart = &size
+		r.Latest.DurationEcart = &ecart{Texte: signed(sign, ec.Duration.Abs().String()), Sens: sens(sign)}
 	}
 	return r
 }
@@ -342,13 +371,34 @@ func compteurs(parEtat [etat.Injoignable + 1]int) []compteur {
 	return out
 }
 
+// ecart est un Écart prêt à afficher : son texte signé et son sens.
+type ecart struct {
+	// Texte est l'Écart signé : « −97 % », « +4s ».
+	Texte string
+	// Sens est sa flèche : ↑, ↓ ou →.
+	Sens string
+}
+
 // sizeEcart écrit l'Écart de taille en pourcentage arrondi : « −97 % ».
-func sizeEcart(e releve.Ecart) string {
+func sizeEcart(e releve.Ecart) ecart {
 	if e.SizeFromZero {
-		return "nouveau"
+		return ecart{Texte: "nouveau", Sens: sens(1)}
 	}
 	pct := math.Round(e.Size * 100)
-	return signed(cmp.Compare(pct, 0), fmt.Sprintf("%.0f\u00a0%%", math.Abs(pct)))
+	sign := cmp.Compare(pct, 0)
+	return ecart{Texte: signed(sign, fmt.Sprintf("%.0f\u00a0%%", math.Abs(pct))), Sens: sens(sign)}
+}
+
+// sens est la flèche d'un Écart de signe sign (−1, 0 ou 1) : ↓, → ou ↑.
+func sens(sign int) string {
+	switch sign {
+	case -1:
+		return "↓"
+	case 1:
+		return "↑"
+	default:
+		return "→"
+	}
 }
 
 // signed préfixe une valeur absolue du signe donné par sign (−1, 0 ou 1) :

@@ -503,8 +503,8 @@ func (s *service) dashboard() (names []string, rows map[string]row) {
 	}
 }
 
-// parseDashboard lit les lignes <tr data-store="…">, et dans chacune les
-// cellules <td data-field="…">.
+// parseDashboard lit chaque Store (<… data-store="…">) et tous ses champs
+// (<… data-field="…">), ligne repliée et dépliage confondus.
 func parseDashboard(t *testing.T, body string) (names []string, rows map[string]row, pending bool) {
 	t.Helper()
 	doc, err := html.Parse(strings.NewReader(body))
