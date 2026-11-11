@@ -143,8 +143,44 @@ main h2 { font-size: 15px; }
 .kv dd form { margin-left: 8px; }
 .kv dd .erreur { margin-left: 8px; }
 
-/* Vue détaillée : une ligne compacte par Store, un dépliage pour le reste. */
-.vue-detaillee .stores {
+/* Groupes : un en-tête (voyant du pire État, nom, compteurs), puis ses
+   Stores. */
+.alerte { margin: 0 0 12px; }
+.groupe-entete { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 8px; }
+.groupe-entete h2 { font-size: 15px; margin: 0; }
+.groupe-entete .compteurs { display: flex; gap: 12px; margin: 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--muted); }
+.groupe-entete .compteurs li { display: inline-flex; align-items: center; gap: 5px; }
+.groupe-entete .compteurs .voyant { width: 8px; height: 8px; box-shadow: none; }
+.groupe .vide { margin: 0; padding: 10px 12px; color: var(--muted); font-size: 12.5px; }
+.bandeau .nouveau-groupe { position: relative; }
+.bandeau .nouveau-groupe > summary { list-style: none; cursor: pointer; padding: 3px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel2); }
+.bandeau .nouveau-groupe > summary::-webkit-details-marker { display: none; }
+.bandeau .nouveau-groupe[open] > form {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 5;
+  display: flex;
+  gap: 6px;
+  padding: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px #0002;
+}
+select {
+  font: inherit;
+  color: inherit;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 2px 4px;
+}
+
+/* Vue détaillée : un Groupe par section, une ligne compacte par Store, un
+   dépliage pour le reste. */
+.vue-detaillee .groupe { margin-bottom: 20px; }
+.vue-detaillee .membres {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -180,10 +216,17 @@ main h2 { font-size: 15px; }
   background: var(--bg);
 }
 
-/* Vue simple : une tuile par Store, bordée de la couleur de son État ; un clic
-   l'ouvre en tiroir latéral, avec tout le détail et les actions. */
+/* Vue simple : un Groupe par colonne, une tuile par Store, bordée de la
+   couleur de son État ; un clic l'ouvre en tiroir latéral, avec tout le
+   détail et les actions. Un Groupe seul prend toute la largeur. */
 .vue-simple .stores .entete { display: none; }
 .vue-simple .stores {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+.vue-simple .membres {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 12px;

@@ -16,6 +16,17 @@ import (
 // stateFile est le contenu du fichier d'état.
 type stateFile struct {
 	Stores map[string]storeState `json:"stores"`
+	// Groupes sont les Groupes, dans l'ordre, et SansGroupe les Stores rangés
+	// nulle part, dans l'ordre. Un fichier qui n'en a pas (version
+	// précédente) range tous ses Stores dans « Sans groupe ».
+	Groupes    []savedGroupe `json:"groupes"`
+	SansGroupe []string      `json:"sans_groupe"`
+}
+
+// savedGroupe est un Groupe enregistré : son nom et ses membres, dans l'ordre.
+type savedGroupe struct {
+	Nom    string   `json:"nom"`
+	Stores []string `json:"stores"`
 }
 
 // storeState est ce que le service sait d'un Store, en dehors de la config
@@ -53,6 +64,10 @@ func (c *Catalogue) load() error {
 	if err := json.Unmarshal(raw, &f); err != nil {
 		return err
 	}
+	for _, g := range f.Groupes {
+		c.groupes = append(c.groupes, groupe{nom: g.Nom, membres: slices.Clone(g.Stores)})
+	}
+	c.sansGroupe = slices.Clone(f.SansGroupe)
 	for name, s := range f.Stores {
 		if !slices.Contains(c.names, name) {
 			continue
@@ -82,7 +97,10 @@ func (c *Catalogue) load() error {
 // écrit à côté, puis renommé, si bien qu'un arrêt brutal laisse l'ancien
 // fichier ou le nouveau, jamais un fichier tronqué. Il faut tenir c.mu.
 func (c *Catalogue) save() error {
-	f := stateFile{Stores: map[string]storeState{}}
+	f := stateFile{Stores: map[string]storeState{}, Groupes: []savedGroupe{}, SansGroupe: append([]string{}, c.sansGroupe...)} // [] et non null, même vide
+	for _, g := range c.groupes {
+		f.Groupes = append(f.Groupes, savedGroupe{Nom: g.nom, Stores: slices.Clone(g.membres)})
+	}
 	for _, name := range c.names {
 		var s storeState
 		if d, ok := c.seuils[name]; ok {

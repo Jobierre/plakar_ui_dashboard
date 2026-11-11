@@ -132,6 +132,29 @@ func Handler(c Dashboard) http.Handler {
 		// La page montre alors les Relevés en cours, et se rafraîchit seule.
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	})
+	mux.HandleFunc("POST /groupes", func(w http.ResponseWriter, r *http.Request) {
+		nom := r.FormValue("nom")
+		if err := c.Catalogue.CreerGroupe(nom); err != nil {
+			c.refuserRangement(w, r, err, &rangementRefused{Err: err.Error(), Nom: nom, Creation: true})
+			return
+		}
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	})
+	mux.HandleFunc("POST /stores/{store}/groupe", func(w http.ResponseWriter, r *http.Request) {
+		store, nom := r.PathValue("store"), r.FormValue("groupe")
+		if err := c.Catalogue.Ranger(store, nom); err != nil {
+			msg := err.Error()
+			switch {
+			case errors.Is(err, catalogue.ErrUnknownGroupe):
+				msg = fmt.Sprintf("Le Groupe « %s » n'existe pas.", nom)
+			case errors.Is(err, catalogue.ErrUnknownStore):
+				msg = fmt.Sprintf("Le Store « %s » n'existe pas.", store)
+			}
+			c.refuserRangement(w, r, err, &rangementRefused{Err: msg})
+			return
+		}
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	})
 	mux.HandleFunc("POST /stores/{store}/exploration", func(w http.ResponseWriter, r *http.Request) {
 		name := r.PathValue("store")
 		e, ok := c.Catalogue.Entry(name)
@@ -175,6 +198,21 @@ func Handler(c Dashboard) http.Handler {
 	return http.NewCrossOriginProtection().Handler(mux)
 }
 
+// refuserRangement renvoie la page avec le refus d'une action de rangement :
+// un nom refusé ou un Groupe ou Store inconnu est la faute de la requête, un
+// autre échec (l'enregistrement) celle du service.
+func (c Dashboard) refuserRangement(w http.ResponseWriter, r *http.Request, err error, refus *rangementRefused) {
+	status := http.StatusInternalServerError
+	var nom *catalogue.NomRefuse
+	switch {
+	case errors.As(err, &nom):
+		status = http.StatusBadRequest
+	case errors.Is(err, catalogue.ErrUnknownGroupe), errors.Is(err, catalogue.ErrUnknownStore):
+		status = http.StatusNotFound
+	}
+	c.render(w, r, status, view{rangement: refus})
+}
+
 // seuilRefused est un Seuil de retard refusé, à signaler sur la ligne de son
 // Store.
 type seuilRefused struct {
@@ -207,38 +245,112 @@ type view struct {
 	accueil     bool
 	seuil       *seuilRefused
 	exploration *explorationRefused
+	rangement   *rangementRefused
 	commande    *commandeResult
+}
+
+// rangementRefused est une action de rangement refusée : son message, et le
+// nom de Groupe refusé s'il s'agit d'une création.
+type rangementRefused struct {
+	Err, Nom string
+	// Creation : le refus porte sur « + Groupe », dont le formulaire s'ouvre.
+	Creation bool
+}
+
+// sansGroupeNom est le nom affiché de « Sans groupe ».
+const sansGroupeNom = "Sans groupe"
+
+// section est un Groupe de la page, ou « Sans groupe » : son en-tête et ses
+// Stores. Cle est ce qui le désigne dans les formulaires et dans la page.
+type section struct {
+	Cle, Nom string
+	// Voyant est celui du pire État de ses Stores, vide sans État.
+	Voyant    string
+	Compteurs []compteur
+	Rows      []row
+}
+
+// choixGroupe est un rangement proposé par la liste déroulante « Groupe ».
+type choixGroupe struct {
+	Cle, Nom string
+}
+
+// pire est le voyant du pire État parmi ces nombres de Stores par État : En
+// retard, puis Injoignable, puis À jour. Il est vide si aucun Store n'a
+// d'État.
+func pire(parEtat [etat.Injoignable + 1]int) string {
+	for _, st := range []etat.Etat{etat.EnRetard, etat.Injoignable, etat.AJour} {
+		if parEtat[st] > 0 {
+			return voyant(st)
+		}
+	}
+	return ""
 }
 
 // render écrit le tableau de bord de l'Utilisateur autorisé de la requête,
 // avec ce que v y ajoute.
 func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, v view) {
 	now := c.Now()
-	rows := make([]row, 0)
 	// Injoignable est le dernier État.
 	var parEtat [etat.Injoignable + 1]int
-	// enCours compte les Stores dont un Relevé est en cours.
-	enCours := 0
-	for _, e := range c.Catalogue.Entries() {
-		line := c.newRow(e, now)
-		if line.EnCours {
-			enCours++
+	// enCours compte les Stores dont un Relevé est en cours, total les Stores
+	// affichés.
+	enCours, total := 0, 0
+	// index numérote les Stores de la page, pour nommer leurs formulaires.
+	index := 0
+	newRows := func(entries []catalogue.Entry) ([]row, [etat.Injoignable + 1]int) {
+		rows := make([]row, 0, len(entries))
+		var duGroupe [etat.Injoignable + 1]int
+		for _, e := range entries {
+			line := c.newRow(e, now)
+			line.Index = index
+			index++
+			total++
+			if line.EnCours {
+				enCours++
+			}
+			// Un Store sans Relevé terminé n'est compté nulle part.
+			if line.etat != nil {
+				parEtat[*line.etat]++
+				duGroupe[*line.etat]++
+			}
+			// Le dépliage d'un Store s'ouvre de lui-même sur l'action qui vient
+			// d'y échouer.
+			if v.seuil != nil && v.seuil.store == e.Name {
+				line.SeuilInput, line.SeuilError = v.seuil.text, v.seuil.err
+				line.Open = true
+			}
+			if v.exploration != nil && v.exploration.store == e.Name {
+				line.ExplorationError = v.exploration.err
+				line.Open = true
+			}
+			rows = append(rows, line)
 		}
-		// Un Store sans Relevé terminé n'est compté nulle part.
-		if line.etat != nil {
-			parEtat[*line.etat]++
+		return rows, duGroupe
+	}
+	groupes, sans := c.Catalogue.Groupes()
+	// choix sont les rangements proposés par la liste déroulante « Groupe » :
+	// chaque Groupe, puis « Sans groupe ».
+	choix := make([]choixGroupe, 0, len(groupes)+1)
+	for _, g := range groupes {
+		choix = append(choix, choixGroupe{Cle: g.Nom, Nom: g.Nom})
+	}
+	choix = append(choix, choixGroupe{Cle: catalogue.SansGroupe, Nom: sansGroupeNom})
+	sections := make([]section, 0, len(groupes)+1)
+	add := func(cle, nom string, entries []catalogue.Entry) {
+		rows, duGroupe := newRows(entries)
+		for i := range rows {
+			rows[i].Choix = choix
+			rows[i].Groupe = cle
 		}
-		// Le dépliage d'un Store s'ouvre de lui-même sur l'action qui vient d'y
-		// échouer.
-		if v.seuil != nil && v.seuil.store == e.Name {
-			line.SeuilInput, line.SeuilError = v.seuil.text, v.seuil.err
-			line.Open = true
-		}
-		if v.exploration != nil && v.exploration.store == e.Name {
-			line.ExplorationError = v.exploration.err
-			line.Open = true
-		}
-		rows = append(rows, line)
+		sections = append(sections, section{Cle: cle, Nom: nom, Voyant: pire(duGroupe), Compteurs: compteurs(duGroupe), Rows: rows})
+	}
+	for _, g := range groupes {
+		add(g.Nom, g.Nom, g.Stores)
+	}
+	// « Sans groupe » vient en dernier, et seulement s'il a des Stores.
+	if len(sans) > 0 {
+		add(catalogue.SansGroupe, sansGroupeNom, sans)
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	// La page porte les jetons des Explorations en cours, et la sortie d'une
@@ -256,14 +368,18 @@ func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, v 
 		// (refus, erreur, sortie de Commande) ne se recharge pas : elle
 		// perdrait son message.
 		Rafraichir bool
-		Rows       []row
-		Commande   *commandeResult
+		Groupes    []section
+		// Rangement est l'échec d'une action de rangement, avec le nom refusé
+		// à rendre au formulaire « + Groupe ».
+		Rangement *rangementRefused
+		Commande  *commandeResult
 	}{
 		User:        acces.User(r.Context()),
 		Compteurs:   compteurs(parEtat),
-		ToutEnCours: enCours == len(rows),
+		ToutEnCours: enCours == total,
 		Rafraichir:  v.accueil && enCours > 0,
-		Rows:        rows,
+		Groupes:     sections,
+		Rangement:   v.rangement,
 		Commande:    v.commande,
 	}
 	if err := page.Execute(w, data); err != nil {
@@ -273,8 +389,13 @@ func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, v 
 
 // row est une ligne du tableau de bord, prête à afficher.
 type row struct {
-	Name    string
+	Name string
+	// Index numérote le Store dans la page, pour nommer ses formulaires.
+	Index   int
 	Pending bool
+	// Groupe désigne le rangement du Store, Choix ceux qu'on peut lui donner.
+	Groupe string
+	Choix  []choixGroupe
 	// EnCours indique qu'un Relevé du Store est en cours ; ReleveAt est
 	// l'heure du dernier Relevé terminé, vide s'il n'y en a pas.
 	EnCours  bool

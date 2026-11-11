@@ -31,6 +31,23 @@ type Catalogue struct {
 	enCours map[string]Jeton
 	// dernier est le dernier jeton attribué.
 	dernier Jeton
+	// groupes sont les Groupes, dans l'ordre, et sansGroupe les Stores rangés
+	// nulle part, dans l'ordre. Chaque Store de la config est dans l'un des
+	// deux, une seule fois.
+	groupes    []groupe
+	sansGroupe []string
+}
+
+// groupe est un Groupe : son nom et ses membres, dans l'ordre.
+type groupe struct {
+	nom     string
+	membres []string
+}
+
+// Groupe est un Groupe et ses Stores, dans l'ordre.
+type Groupe struct {
+	Nom    string
+	Stores []Entry
 }
 
 // Jeton désigne un Relevé commencé par Begin. Seul le Relevé en cours d'un
@@ -66,7 +83,9 @@ func Open(path string, names []string, plage Plage) (*Catalogue, error) {
 	if err := c.load(); err != nil {
 		return nil, fmt.Errorf("fichier d'état %s : %w", path, err)
 	}
-	if c.assignPorts() {
+	// Les deux doivent être faits : pas de court-circuit.
+	ranges, ports := c.reconcilier(), c.assignPorts()
+	if ranges || ports {
 		if err := c.save(); err != nil {
 			return nil, fmt.Errorf("fichier d'état %s : %w", path, err)
 		}
@@ -156,6 +175,7 @@ func (c *Catalogue) SetStores(names []string) error {
 	// Le port d'un Store retiré est libéré, et peut servir à un Store ajouté.
 	maps.DeleteFunc(c.ports, func(name string, _ int) bool { return removed(name) })
 	c.assignPorts()
+	c.reconcilier()
 	// Le Relevé en cours d'un Store retiré ne compte plus : s'il revient,
 	// sous une autre config peut-être, son premier Relevé est un nouveau.
 	maps.DeleteFunc(c.enCours, func(name string, _ Jeton) bool { return removed(name) })
@@ -213,14 +233,39 @@ func (c *Catalogue) Entries() []Entry {
 	defer c.mu.Unlock()
 	entries := make([]Entry, len(c.names))
 	for i, name := range c.names {
-		_, enCours := c.enCours[name]
-		entries[i] = Entry{Name: name, EnCours: enCours, Port: c.ports[name]}
-		if r, ok := c.results[name]; ok {
-			entries[i].Releve = &r
-		}
-		if d, ok := c.seuils[name]; ok {
-			entries[i].Seuil = &d
-		}
+		entries[i] = c.entry(name)
 	}
 	return entries
+}
+
+// entry renvoie le Store qui porte ce nom. Il faut tenir c.mu.
+func (c *Catalogue) entry(name string) Entry {
+	_, enCours := c.enCours[name]
+	e := Entry{Name: name, EnCours: enCours, Port: c.ports[name]}
+	if r, ok := c.results[name]; ok {
+		e.Releve = &r
+	}
+	if d, ok := c.seuils[name]; ok {
+		e.Seuil = &d
+	}
+	return e
+}
+
+// Groupes renvoie les Groupes et leurs Stores, dans l'ordre, puis les Stores
+// « Sans groupe », dans l'ordre.
+func (c *Catalogue) Groupes() (groupes []Groupe, sansGroupe []Entry) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entries := func(names []string) []Entry {
+		out := make([]Entry, len(names))
+		for i, name := range names {
+			out[i] = c.entry(name)
+		}
+		return out
+	}
+	groupes = make([]Groupe, len(c.groupes))
+	for i, g := range c.groupes {
+		groupes[i] = Groupe{Nom: g.nom, Stores: entries(g.membres)}
+	}
+	return groupes, entries(c.sansGroupe)
 }
