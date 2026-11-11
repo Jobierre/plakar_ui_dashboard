@@ -7,3 +7,4 @@
 
 # Volumes de test locaux du compose (état Tailscale, clés, config plakar)
 /test_plakar/
+.DS_Store
