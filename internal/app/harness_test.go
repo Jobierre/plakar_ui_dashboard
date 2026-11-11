@@ -398,6 +398,19 @@ func (s *service) request(method, path string) *http.Request {
 // le code et le corps obtenus.
 func (s *service) do(req *http.Request, user string) (int, string) {
 	s.t.Helper()
+	resp := s.raw(req, user)
+	return resp.code, resp.body
+}
+
+// rawResponse est une réponse du service lue en entier, avec son type.
+type rawResponse struct {
+	code              int
+	contentType, body string
+}
+
+// raw est do, mais renvoie aussi le type de la réponse.
+func (s *service) raw(req *http.Request, user string) rawResponse {
+	s.t.Helper()
 	if user != "" {
 		req.Header.Set(identityHeader, user)
 	}
@@ -410,7 +423,7 @@ func (s *service) do(req *http.Request, user string) (int, string) {
 	if err != nil {
 		s.t.Fatal(err)
 	}
-	return resp.StatusCode, string(body)
+	return rawResponse{code: resp.StatusCode, contentType: resp.Header.Get("Content-Type"), body: string(body)}
 }
 
 // setSeuil envoie le formulaire de Seuil de retard d'un Store, comme le ferait
@@ -514,6 +527,9 @@ func parseDashboard(t *testing.T, body string) (names []string, rows map[string]
 				current[field] = text(n)
 				if title, ok := attr(n, "title"); ok {
 					current[field+".title"] = title
+				}
+				if etat, ok := attr(n, "data-etat"); ok {
+					current[field+".etat"] = etat
 				}
 			}
 		}

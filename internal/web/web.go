@@ -24,6 +24,12 @@ import (
 //go:embed templates/*.html
 var templates embed.FS
 
+// static sont les fichiers servis tels quels au navigateur, intégrés au
+// binaire : l'interface ne dépend d'aucun CDN.
+//
+//go:embed static
+var static embed.FS
+
 var page = template.Must(template.ParseFS(templates, "templates/dashboard.html"))
 
 // Dashboard est le tableau de bord et ce dont il a besoin.
@@ -64,6 +70,8 @@ func Handler(c Dashboard) http.Handler {
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		c.render(w, r, http.StatusOK, view{})
 	})
+	// La feuille de style et le script, derrière l'Accès comme le reste.
+	mux.Handle("GET /static/", http.FileServerFS(static))
 	mux.HandleFunc("POST /stores/{store}/seuil", func(w http.ResponseWriter, r *http.Request) {
 		name := r.PathValue("store")
 		// Une valeur vide rend au Store le Seuil par défaut.
@@ -178,8 +186,14 @@ type view struct {
 func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, v view) {
 	now := c.Now()
 	rows := make([]row, 0)
+	// Injoignable est le dernier État.
+	var parEtat [etat.Injoignable + 1]int
 	for _, e := range c.Catalogue.Entries() {
 		line := c.newRow(e, now)
+		// Un Store sans Relevé terminé n'est compté nulle part.
+		if line.etat != nil {
+			parEtat[*line.etat]++
+		}
 		if v.seuil != nil && v.seuil.store == e.Name {
 			line.SeuilInput, line.SeuilError = v.seuil.text, v.seuil.err
 		}
@@ -194,10 +208,11 @@ func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, v 
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
 	data := struct {
-		User     string
-		Rows     []row
-		Commande *commandeResult
-	}{User: acces.User(r.Context()), Rows: rows, Commande: v.commande}
+		User      string
+		Compteurs []compteur
+		Rows      []row
+		Commande  *commandeResult
+	}{User: acces.User(r.Context()), Compteurs: compteurs(parEtat), Rows: rows, Commande: v.commande}
 	if err := page.Execute(w, data); err != nil {
 		c.Log.Error("rendu du tableau de bord", "err", err)
 	}
@@ -211,9 +226,11 @@ type row struct {
 	// l'heure du dernier Relevé terminé, vide s'il n'y en a pas.
 	EnCours  bool
 	ReleveAt string
-	// Etat est vide tant qu'aucun Relevé n'est terminé.
-	Etat  string
-	Seuil string
+	// Etat est le mot de l'État, « Premier Relevé » tant qu'aucun Relevé
+	// n'est terminé ; Voyant est la couleur qui l'accompagne, vide sans État.
+	Etat, Voyant string
+	etat         *etat.Etat
+	Seuil        string
 	// SeuilInput est la valeur du champ de Seuil, vide pour le Seuil par
 	// défaut ; SeuilError explique pourquoi une valeur saisie a été refusée.
 	SeuilInput, SeuilError string
@@ -251,8 +268,10 @@ func (c Dashboard) newRow(e catalogue.Entry, now time.Time) row {
 		r.Seuil = etat.FormatSeuil(seuil)
 		r.SeuilInput = r.Seuil
 	}
+	r.Etat = "Premier Relevé"
 	if e.Releve != nil {
-		r.Etat = etat.Of(e.Releve.Latest, seuil, now, e.Releve.Err).String()
+		st := etat.Of(e.Releve.Latest, seuil, now, e.Releve.Err)
+		r.Etat, r.Voyant, r.etat = st.String(), voyant(st), &st
 		r.ReleveAt = e.Releve.At.In(c.Location).Format(dateLayout)
 	}
 	switch {
@@ -290,6 +309,37 @@ func (c Dashboard) newRow(e catalogue.Entry, now time.Time) row {
 		r.Latest.DurationEcart = signed(cmp.Compare(ec.Duration, 0), ec.Duration.Abs().String())
 	}
 	return r
+}
+
+// voyant est la couleur d'un État, nommée comme dans la feuille de style.
+func voyant(e etat.Etat) string {
+	switch e {
+	case etat.AJour:
+		return "a-jour"
+	case etat.EnRetard:
+		return "en-retard"
+	case etat.Injoignable:
+		return "injoignable"
+	default:
+		panic(fmt.Sprintf("État sans voyant : %d", e))
+	}
+}
+
+// compteur est un compteur du bandeau : le nombre de Stores d'un État.
+type compteur struct {
+	Voyant, Etat string
+	N            int
+}
+
+// compteurs sont les compteurs du bandeau, un par État, depuis le nombre de
+// Stores de chaque État.
+func compteurs(parEtat [etat.Injoignable + 1]int) []compteur {
+	out := make([]compteur, 0, len(parEtat))
+	for e, n := range parEtat {
+		st := etat.Etat(e)
+		out = append(out, compteur{Voyant: voyant(st), Etat: st.String(), N: n})
+	}
+	return out
 }
 
 // sizeEcart écrit l'Écart de taille en pourcentage arrondi : « −97 % ».

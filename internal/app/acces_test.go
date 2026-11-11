@@ -144,23 +144,7 @@ func TestDashboardShowsTheIdentityOfTheAuthorizedUser(t *testing.T) {
 // elementText renvoie le texte de l'élément de la page qui porte cet id.
 func elementText(t *testing.T, body, id string) string {
 	t.Helper()
-	doc, err := html.Parse(strings.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var find func(*html.Node) *html.Node
-	find = func(n *html.Node) *html.Node {
-		if v, ok := attr(n, "id"); ok && n.Type == html.ElementNode && v == id {
-			return n
-		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			if found := find(c); found != nil {
-				return found
-			}
-		}
-		return nil
-	}
-	n := find(doc)
+	n := findElement(t, body, func(n *html.Node) bool { v, _ := attr(n, "id"); return v == id })
 	if n == nil {
 		t.Fatalf("aucun élément id=%q :\n%s", id, body)
 	}

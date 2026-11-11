@@ -2,12 +2,23 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>plakar-ui</title>
+<link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<p>Connecté en tant que <span id="utilisateur">{{.User}}</span></p>
-<h1>Stores</h1>
-<table>
+<header class="bandeau" data-bandeau>
+<h1>plakar-ui</h1>
+<ul class="compteurs" aria-label="Stores par État">
+{{- range .Compteurs}}
+<li><span class="voyant {{.Voyant}}" aria-hidden="true"></span> <span data-compteur="{{.Voyant}}">{{.N}}</span> {{.Etat}}</li>
+{{- end}}
+</ul>
+<p class="utilisateur">Connecté en tant que <span id="utilisateur">{{.User}}</span></p>
+</header>
+<main>
+<h2>Stores</h2>
+<table class="stores">
 <thead>
 <tr><th>Store</th><th>Dernier Relevé</th><th></th><th></th><th>État</th><th>Seuil de retard</th><th></th><th></th><th>Dernier snapshot</th><th>Âge</th><th>ID</th><th>Taille</th><th>Écart de taille</th><th>Durée</th><th>Écart de durée</th><th>Source</th><th>Tags</th><th>Erreur</th><th>Exploration</th><th></th><th></th></tr>
 </thead>
@@ -18,7 +29,7 @@
 <td data-field="releve">{{.ReleveAt}}</td>
 <td data-field="releve-en-cours">{{if .EnCours}}Relevé en cours{{end}}</td>
 <td><form method="post" action="/stores/{{.Name}}/releve"><button aria-label="Relever {{.Name}} maintenant" title="Relever maintenant"{{if .EnCours}} disabled{{end}}>↻</button></form></td>
-<td data-field="etat">{{.Etat}}</td>
+<td><span class="etat">{{with .Voyant}}<span class="voyant {{.}}" data-field="voyant" data-etat="{{.}}" aria-hidden="true"></span> {{end}}<span data-field="etat">{{.Etat}}</span></span></td>
 <td data-field="seuil">{{.Seuil}}</td>
 <td><form method="post" action="/stores/{{.Name}}/seuil"><input name="seuil" value="{{.SeuilInput}}" placeholder="par défaut" aria-label="Seuil de retard de {{.Name}}" size="6"> <button>Modifier</button></form></td>
 <td data-field="seuil-error">{{.SeuilError}}</td>
@@ -35,7 +46,7 @@
 {{- else}}
 <td data-field="latest" colspan="9">{{.Message}}</td>
 {{- end}}
-<td data-field="error">{{.Error}}</td>
+<td data-field="error" class="erreur">{{.Error}}</td>
 <td data-field="exploration">{{with .Exploration}}<a href="{{.}}" target="_blank" rel="noopener noreferrer">{{.}}</a>{{end}}</td>
 <td>{{if .PortMessage}}<span data-field="port-message">{{.PortMessage}}</span>{{else}}<form method="post" action="/stores/{{.Name}}/exploration"><button>Explorer</button></form>{{end}}{{if .Exploration}} <form method="post" action="/stores/{{.Name}}/exploration/arret"><button>Arrêter</button></form>{{end}}</td>
 <td data-field="exploration-error">{{.ExplorationError}}</td>
@@ -43,6 +54,7 @@
 {{- end}}
 </tbody>
 </table>
+<section class="gerer">
 <h2>Commande de Store</h2>
 <form method="post" action="/commande">
 <input name="commande" size="80" autocomplete="off" spellcheck="false" placeholder="plakar store add …" aria-label="Commande de Store">
@@ -60,11 +72,13 @@
 {{- with .Sortie}}
 <p>Code de retour : <span data-commande="code">{{.Code}}</span></p>
 <h3>Sortie standard</h3>
-<pre data-commande="stdout">{{.Stdout}}</pre>
+<pre class="terminal" data-commande="stdout">{{.Stdout}}</pre>
 <h3>Sortie d'erreur</h3>
-<pre data-commande="stderr">{{.Stderr}}</pre>
+<pre class="terminal" data-commande="stderr">{{.Stderr}}</pre>
 {{- end}}
 </section>
 {{- end}}
+</section>
+</main>
 </body>
 </html>

@@ -1,0 +1,158 @@
+/* Feuille de style du tableau de bord : écrite à la main, sans framework, et
+   servie par le service lui-même. Le thème suit le réglage du système. */
+
+:root {
+  --bg: #f6f7f9;
+  --panel: #fff;
+  --panel2: #f0f2f5;
+  --fg: #1d2330;
+  --muted: #6b7385;
+  --line: #e2e5eb;
+  --a-jour: #1f9d55;
+  --en-retard: #d64545;
+  --injoignable: #e08a1e;
+  --erreur: #c2410c;
+  --accent: #3a6fd8;
+  --term: #0f1420;
+  --termfg: #cfe3ff;
+  --radius: 10px;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12151c;
+    --panel: #1a1e27;
+    --panel2: #222733;
+    --fg: #e4e8f0;
+    --muted: #8a93a6;
+    --line: #2c3240;
+    --accent: #6d9bff;
+    --term: #0a0d14;
+    --erreur: #f0883e;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+a { color: var(--accent); }
+code, pre { font-family: var(--mono); font-size: 12.5px; }
+
+button {
+  font: inherit;
+  color: inherit;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: default; }
+
+input {
+  font: inherit;
+  color: inherit;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 6px;
+}
+
+form { display: inline; margin: 0; }
+
+/* Voyant : la couleur de l'État, toujours accompagnée de son mot. */
+.voyant {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--muted);
+}
+.voyant.a-jour { background: var(--a-jour); box-shadow: 0 0 0 3px color-mix(in srgb, var(--a-jour) 22%, transparent); }
+.voyant.en-retard { background: var(--en-retard); box-shadow: 0 0 0 3px color-mix(in srgb, var(--en-retard) 22%, transparent); }
+.voyant.injoignable { background: var(--injoignable); box-shadow: 0 0 0 3px color-mix(in srgb, var(--injoignable) 22%, transparent); }
+
+.etat { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+
+/* Bandeau : résumé d'un coup d'œil, visible au défilement. */
+.bandeau {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding: 12px 22px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.bandeau h1 { font-size: 16px; margin: 0 8px 0 0; }
+.bandeau .compteurs { display: flex; flex-wrap: wrap; gap: 14px; margin: 0; padding: 0; list-style: none; }
+.bandeau .compteurs li { display: inline-flex; align-items: center; gap: 6px; }
+.bandeau .compteurs [data-compteur] { font-weight: 600; }
+.bandeau .utilisateur { margin: 0 0 0 auto; font-size: 12px; color: var(--muted); }
+
+main { max-width: 1400px; margin: 18px auto; padding: 0 18px; }
+main h2 { font-size: 15px; }
+
+/* Tableau des Stores. */
+.stores {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.stores th, .stores td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+.stores th {
+  font-size: 11.5px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--muted);
+  background: var(--panel2);
+}
+.stores tbody tr:last-child td { border-bottom: 0; }
+.stores [data-field="name"] { font-weight: 600; }
+.erreur { color: var(--erreur); font-size: 12.5px; white-space: normal; }
+
+/* Commande de Store. */
+.gerer {
+  margin-top: 22px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+pre.terminal {
+  margin: 6px 0;
+  padding: 10px 12px;
+  overflow: auto;
+  background: var(--term);
+  color: var(--termfg);
+  border-radius: 8px;
+  line-height: 1.4;
+}
+
+@media (max-width: 700px) {
+  .bandeau { padding: 10px 14px; gap: 10px; }
+  .bandeau .utilisateur { margin-left: 0; }
+  main { padding: 0 10px; }
+}
