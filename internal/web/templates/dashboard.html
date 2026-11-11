@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" class="vue-simple">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -8,6 +8,7 @@
 {{- end}}
 <title>plakar-ui</title>
 <link rel="stylesheet" href="/static/style.css">
+<script src="/static/vue.js"></script>
 </head>
 <body>
 <header class="bandeau" data-bandeau>
@@ -18,13 +19,14 @@
 {{- end}}
 </ul>
 <form method="post" action="/releve" class="tout-relever"><button class="primaire" data-tout-relever{{if .ToutEnCours}} disabled{{end}}><span aria-hidden="true">↻</span> Tout relever</button></form>
+<div class="bascule" role="group" aria-label="Vue" data-bascule hidden><button type="button" data-vue="simple">Simple</button><button type="button" data-vue="detaillee">Détaillée</button></div>
 <p class="utilisateur">Connecté en tant que <span id="utilisateur">{{.User}}</span></p>
 </header>
 <main>
 <section class="stores" aria-label="Stores">
 <div class="entete" aria-hidden="true"><span>État</span><span>Store</span><span>Dernier snapshot</span><span>Taille</span><span>Écart</span><span>Relevé</span><span></span></div>
 {{- range $i, $r := .Rows}}
-<details class="store{{if .Perime}} perime{{end}}" data-store="{{.Name}}"{{if .Pending}} data-pending{{end}}{{if .Open}} open{{end}}>
+<details class="store{{with .Voyant}} bord-{{.}}{{end}}{{if .Perime}} perime{{end}}" data-store="{{.Name}}"{{if .Pending}} data-pending{{end}}{{if .Open}} open{{end}}>
 <summary class="ligne" data-ligne>
 <span class="c-etat etat">{{with .Voyant}}<span class="voyant {{.}}" data-field="voyant" data-etat="{{.}}" aria-hidden="true"></span> {{end}}<span data-field="etat">{{.Etat}}</span></span>
 <span class="c-nom"><span class="nom" data-field="name">{{.Name}}</span>{{with .Error}}<span class="erreur" data-field="error">{{.}}</span>{{end}}</span>

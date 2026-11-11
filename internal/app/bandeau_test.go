@@ -91,20 +91,29 @@ func TestStylesheetIsServedToAnAuthorizedUserOnly(t *testing.T) {
 		t.Fatalf("la page ne charge aucune feuille de style :\n%s", body)
 	}
 	href, _ := attr(link, "href")
-	if !strings.HasPrefix(href, "/") {
-		t.Fatalf("feuille de style %q : doit être servie par le service lui-même, sans CDN", href)
-	}
 
-	req := svc.request(http.MethodGet, href)
-	resp := svc.raw(req, testUser)
-	if resp.code != http.StatusOK || !strings.HasPrefix(resp.contentType, "text/css") || !strings.Contains(resp.body, "prefers-color-scheme") {
-		t.Errorf("GET %s : code %d, type %q, corps de %d octets ; attendu une feuille CSS claire et sombre", href, resp.code, resp.contentType, len(resp.body))
+	css := assertServedToAuthorizedOnly(t, svc, href, "text/css")
+	if !strings.Contains(css, "prefers-color-scheme") {
+		t.Errorf("GET %s : attendu une feuille CSS claire et sombre", href)
 	}
+}
 
-	req = svc.request(http.MethodGet, href)
-	if code, _ := svc.do(req, "intrus@example.com"); code != http.StatusForbidden {
-		t.Errorf("GET %s par une identité hors liste : code %d, attendu %d", href, code, http.StatusForbidden)
+// assertServedToAuthorizedOnly vérifie qu'un fichier du tableau de bord est
+// servi par le service lui-même, avec ce type, à l'Utilisateur autorisé, et
+// refusé à une identité hors de la liste. Il renvoie le fichier servi.
+func assertServedToAuthorizedOnly(t *testing.T, svc *service, path, wantType string) string {
+	t.Helper()
+	if !strings.HasPrefix(path, "/") {
+		t.Fatalf("%q : doit être servi par le service lui-même, sans CDN", path)
 	}
+	resp := svc.raw(svc.request(http.MethodGet, path), testUser)
+	if resp.code != http.StatusOK || !strings.HasPrefix(resp.contentType, wantType) || resp.body == "" {
+		t.Errorf("GET %s : code %d, type %q, corps de %d octets ; attendu %d, %s", path, resp.code, resp.contentType, len(resp.body), http.StatusOK, wantType)
+	}
+	if code, _ := svc.do(svc.request(http.MethodGet, path), "intrus@example.com"); code != http.StatusForbidden {
+		t.Errorf("GET %s par une identité hors liste : code %d, attendu %d", path, code, http.StatusForbidden)
+	}
+	return resp.body
 }
 
 // assertCompteurs vérifie les compteurs du bandeau, <… data-compteur="…">.

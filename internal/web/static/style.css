@@ -103,6 +103,12 @@ form { display: inline; margin: 0; }
 .bandeau .compteurs li { display: inline-flex; align-items: center; gap: 6px; }
 .bandeau .compteurs [data-compteur] { font-weight: 600; }
 .bandeau .tout-relever { margin: 0 0 0 auto; }
+/* Sélecteur « Simple | Détaillée » : affiché par le script, seul à le faire
+   marcher. */
+.bascule { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.bascule[hidden] { display: none; }
+.bascule button { border: 0; border-radius: 0; background: none; padding: 4px 12px; }
+.bascule button[aria-pressed="true"] { background: var(--accent); color: #fff; }
 .bandeau .utilisateur { margin: 0; font-size: 12px; color: var(--muted); }
 
 main { max-width: 1400px; margin: 18px auto; padding: 0 18px; }
@@ -111,43 +117,16 @@ main h2 { font-size: 15px; }
 .mono { font-family: var(--mono); font-size: 12.5px; }
 .erreur { color: var(--erreur); font-size: 12.5px; }
 
-/* Vue détaillée : une ligne compacte par Store, un dépliage pour le reste. */
-.stores {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-.stores .entete,
-.stores .ligne {
-  display: grid;
-  grid-template-columns: 130px minmax(150px, 1.4fr) 110px 90px 90px 120px minmax(150px, auto);
-  align-items: center;
-  gap: 8px;
-  padding: 7px 12px;
-  border-bottom: 1px solid var(--line);
-}
-.stores .entete {
-  font-size: 11.5px;
-  text-transform: uppercase;
-  letter-spacing: .04em;
-  color: var(--muted);
-  background: var(--panel2);
-  padding-top: 5px;
-  padding-bottom: 5px;
-}
-.stores details.store:last-child > .ligne,
-.stores details.store:last-child > .depliage { border-bottom: 0; }
-.stores .ligne { list-style: none; cursor: pointer; }
-.stores .ligne::-webkit-details-marker { display: none; }
-.stores .ligne:hover { background: color-mix(in srgb, var(--accent) 4%, transparent); }
-.stores details[open] > .ligne { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+/* Les deux vues partagent le même balisage : la classe de <html> (vue-simple,
+   par défaut, ou vue-detaillee) choisit la mise en page. */
 .stores .nom { font-weight: 600; }
 .stores .c-nom { min-width: 0; }
 .stores .c-nom .erreur { display: block; overflow-wrap: anywhere; }
-.stores .c-snapshot { grid-column: span 3; color: var(--muted); }
+.stores .ligne { list-style: none; cursor: pointer; }
+.stores .ligne::-webkit-details-marker { display: none; }
+.stores .c-snapshot { color: var(--muted); }
 .stores .c-releve { color: var(--muted); white-space: nowrap; }
-.stores .c-actions { display: flex; align-items: center; gap: 6px; justify-content: flex-end; min-width: 0; }
+.stores .c-actions { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .stores .exploration {
   max-width: 90px;
   overflow: hidden;
@@ -158,17 +137,125 @@ main h2 { font-size: 15px; }
 .stores .perime .valeur { opacity: .5; }
 /* L'Écart est une information, jamais une alerte : texte neutre. */
 .ecart { color: var(--muted); white-space: nowrap; }
-
-.stores .depliage {
-  padding: 10px 12px 14px 24px;
-  border-bottom: 1px solid var(--line);
-  background: var(--bg);
-}
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 5px 14px; margin: 0; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; overflow-wrap: anywhere; }
 .kv dd form { margin-left: 8px; }
 .kv dd .erreur { margin-left: 8px; }
+
+/* Vue détaillée : une ligne compacte par Store, un dépliage pour le reste. */
+.vue-detaillee .stores {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.vue-detaillee .stores .entete,
+.vue-detaillee .stores .ligne {
+  display: grid;
+  grid-template-columns: 130px minmax(150px, 1.4fr) 110px 90px 90px 120px minmax(150px, auto);
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.vue-detaillee .stores .entete {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--muted);
+  background: var(--panel2);
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+.vue-detaillee .stores details.store:last-child > .ligne,
+.vue-detaillee .stores details.store:last-child > .depliage { border-bottom: 0; }
+.vue-detaillee .stores .ligne:hover { background: color-mix(in srgb, var(--accent) 4%, transparent); }
+.vue-detaillee .stores details[open] > .ligne { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.vue-detaillee .stores .c-snapshot { grid-column: span 3; }
+.vue-detaillee .stores .c-actions { justify-content: flex-end; }
+.vue-detaillee .stores .depliage {
+  padding: 10px 12px 14px 24px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+
+/* Vue simple : une tuile par Store, bordée de la couleur de son État ; un clic
+   l'ouvre en tiroir latéral, avec tout le détail et les actions. */
+.vue-simple .stores .entete { display: none; }
+.vue-simple .stores {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.vue-simple .store {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--muted);
+  border-radius: 8px;
+}
+.vue-simple .store.bord-a-jour { border-left-color: var(--a-jour); }
+.vue-simple .store.bord-en-retard { border-left-color: var(--en-retard); }
+.vue-simple .store.bord-injoignable { border-left-color: var(--injoignable); }
+.vue-simple .store:not([open]):hover { border-color: var(--accent); }
+.vue-simple .ligne {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: "nom releve" "age age" "etat etat" "taille ecart";
+  align-items: center;
+  gap: 2px 8px;
+  padding: 10px 12px;
+}
+.vue-simple .c-nom { grid-area: nom; }
+.vue-simple .c-releve { grid-area: releve; justify-self: end; font-size: 12px; }
+.vue-simple .c-age { grid-area: age; font-size: 22px; font-weight: 700; margin: 4px 0 2px; }
+.vue-simple .c-etat { grid-area: etat; font-size: 12.5px; color: var(--muted); }
+.vue-simple .c-taille { grid-area: taille; font-size: 12.5px; color: var(--muted); }
+.vue-simple .c-ecart { grid-area: ecart; font-size: 12.5px; }
+/* Sans Dernier snapshot, le message prend la place de la taille et de l'Écart. */
+.vue-simple .c-snapshot { grid-area: taille / taille / ecart / ecart; font-size: 12.5px; }
+/* Une tuile fermée n'a pas d'actions. L'heure du Relevé n'apparaît que s'il
+   est en cours : sinon, le dépliage la donne déjà, en date complète. */
+.vue-simple .store:not([open]) .c-actions { display: none; }
+.vue-simple .c-releve:not(:has([data-field="releve-en-cours"])) { display: none; }
+.vue-simple .depliage { display: none; }
+
+/* Le tiroir est le Store ouvert lui-même, présenté en panneau : sa tuile en
+   tête, qui le referme d'un clic, et son dépliage dessous. */
+.vue-simple .store[open] {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 6;
+  width: min(420px, 100%);
+  overflow: auto;
+  border-width: 0 0 0 5px;
+  border-radius: 0;
+  box-shadow: -10px 0 30px #0003;
+}
+.vue-simple .store[open] > .ligne {
+  position: relative;
+  grid-template-areas: "nom nom" "age age" "etat etat" "taille ecart" "releve releve" "actions actions";
+  padding: 18px 44px 10px 20px;
+}
+.vue-simple .store[open] > .ligne::after {
+  content: "✕";
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  color: var(--muted);
+}
+.vue-simple .store[open] .nom { font-size: 17px; }
+.vue-simple .store[open] .c-releve { justify-self: start; margin-top: 6px; }
+.vue-simple .store[open] .c-actions { grid-area: actions; flex-wrap: wrap; margin-top: 8px; }
+.vue-simple .store[open] .exploration { max-width: 220px; }
+.vue-simple .store[open] > .depliage {
+  display: block;
+  padding: 12px 20px 24px;
+  border-top: 1px solid var(--line);
+}
 
 /* Gérer les Stores : la Commande de Store, rangée tant qu'on ne s'en sert pas. */
 .gerer {
@@ -198,22 +285,22 @@ pre.terminal {
   .bandeau { padding: 10px 14px; gap: 10px; }
   .bandeau .tout-relever { margin-left: 0; }
   main { padding: 0 10px; }
-  /* Chaque ligne s'empile en carte. */
-  .stores .entete { display: none; }
-  .stores .ligne {
+  /* Chaque ligne de la vue détaillée s'empile en carte. */
+  .vue-detaillee .stores .entete { display: none; }
+  .vue-detaillee .stores .ligne {
     grid-template-columns: 1fr auto;
     grid-template-areas: "nom actions" "etat releve" "age taille" "ecart ecart";
     row-gap: 4px;
   }
-  .stores .c-nom { grid-area: nom; }
-  .stores .c-etat { grid-area: etat; }
-  .stores .c-actions { grid-area: actions; }
-  .stores .c-releve { grid-area: releve; justify-self: end; }
-  .stores .c-age { grid-area: age; }
-  .stores .c-taille { grid-area: taille; justify-self: end; }
-  .stores .c-ecart { grid-area: ecart; }
-  .stores .c-snapshot { grid-column: 1 / -1; }
-  .stores .depliage { padding-left: 12px; }
+  .vue-detaillee .stores .c-nom { grid-area: nom; }
+  .vue-detaillee .stores .c-etat { grid-area: etat; }
+  .vue-detaillee .stores .c-actions { grid-area: actions; }
+  .vue-detaillee .stores .c-releve { grid-area: releve; justify-self: end; }
+  .vue-detaillee .stores .c-age { grid-area: age; }
+  .vue-detaillee .stores .c-taille { grid-area: taille; justify-self: end; }
+  .vue-detaillee .stores .c-ecart { grid-area: ecart; }
+  .vue-detaillee .stores .c-snapshot { grid-column: 1 / -1; }
+  .vue-detaillee .stores .depliage { padding-left: 12px; }
   .kv { grid-template-columns: 1fr; }
   .kv dt { margin-top: 4px; }
 }
