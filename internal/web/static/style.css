@@ -168,6 +168,35 @@ main h2 { font-size: 15px; }
   border-radius: 8px;
   box-shadow: 0 8px 24px #0002;
 }
+/* En-tête d'un Groupe : ↑/↓ et menu ⋯ (Renommer, Supprimer après
+   confirmation), à droite. « Sans groupe » n'en a pas. */
+form.ordre { display: inline-flex; gap: 4px; }
+.groupe-entete form.ordre { margin-left: auto; }
+.groupe-entete form.ordre button { padding: 1px 7px; }
+.menu-groupe { position: relative; }
+.menu-groupe > summary { list-style: none; cursor: pointer; padding: 1px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel2); }
+.menu-groupe > summary::-webkit-details-marker { display: none; }
+.menu-groupe[open] > .menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 5;
+  display: grid;
+  gap: 8px;
+  min-width: 260px;
+  padding: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px #0002;
+  font-size: 13px;
+}
+.menu-groupe .menu form { display: flex; gap: 6px; }
+.menu-groupe .menu input { flex: 1; min-width: 0; }
+.menu-groupe .confirmer > summary { cursor: pointer; color: var(--en-retard); }
+.menu-groupe .confirmer p { margin: 6px 0; color: var(--muted); }
+button.danger { background: var(--en-retard); border-color: var(--en-retard); color: #fff; }
+
 select {
   font: inherit;
   color: inherit;

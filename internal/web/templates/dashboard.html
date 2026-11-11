@@ -33,12 +33,26 @@
 <div class="stores" aria-label="Stores">
 {{- range .Groupes}}
 <section class="groupe" data-groupe="{{.Cle}}" aria-label="{{.Nom}}">
-<header class="groupe-entete">
+<header class="groupe-entete" data-groupe-entete>
 {{- with .Voyant}}<span class="voyant {{.}}" data-groupe-voyant="{{.}}" aria-hidden="true"></span>{{end}}
 <h2 data-groupe-nom>{{.Nom}}</h2>
 <ul class="compteurs" aria-label="Stores de {{.Nom}} par État">
 {{- range .Compteurs}}{{if .N}}<li><span class="voyant {{.Voyant}}" aria-hidden="true"></span> <span data-groupe-compteur="{{.Voyant}}">{{.N}}</span> {{.Etat}}</li>{{end}}{{end}}
 </ul>
+{{- if not .Fixe}}
+<form method="post" action="/groupes/{{chemin .Cle}}/ordre" class="ordre"><button name="sens" value="haut" aria-label="Monter {{.Nom}}" title="Monter le Groupe"{{if .Premier}} disabled{{end}}>↑</button><button name="sens" value="bas" aria-label="Descendre {{.Nom}}" title="Descendre le Groupe"{{if .Dernier}} disabled{{end}}>↓</button></form>
+<details class="menu-groupe" data-groupe-menu{{if .MenuOuvert}} open{{end}}>
+<summary aria-label="Actions de {{.Nom}}" title="Renommer ou supprimer">⋯</summary>
+<div class="menu">
+<form method="post" action="/groupes/{{chemin .Cle}}/nom"><input name="nom" value="{{.NomSaisi}}" aria-label="Nouveau nom de {{.Nom}}" required> <button>Renommer</button></form>
+<details class="confirmer">
+<summary>Supprimer…</summary>
+<p>Supprimer « {{.Nom}} » ? Ses Stores iront à la fin de « Sans groupe ».</p>
+<form method="post" action="/groupes/{{chemin .Cle}}/suppression"><button class="danger">Supprimer</button></form>
+</details>
+</div>
+</details>
+{{- end}}
 </header>
 <div class="membres">
 <div class="entete" aria-hidden="true"><span>État</span><span>Store</span><span>Dernier snapshot</span><span>Taille</span><span>Écart</span><span>Relevé</span><span></span></div>
@@ -65,9 +79,9 @@
 {{- end}}
 </span>
 </summary>
-<form id="releve-{{$i}}" method="post" action="/stores/{{.Name}}/releve"></form>
-<form id="explorer-{{$i}}" method="post" action="/stores/{{.Name}}/exploration"></form>
-<form id="arret-{{$i}}" method="post" action="/stores/{{.Name}}/exploration/arret"></form>
+<form id="releve-{{$i}}" method="post" action="/stores/{{chemin .Name}}/releve"></form>
+<form id="explorer-{{$i}}" method="post" action="/stores/{{chemin .Name}}/exploration"></form>
+<form id="arret-{{$i}}" method="post" action="/stores/{{chemin .Name}}/exploration/arret"></form>
 <div class="depliage" data-depliage>
 <dl class="kv">
 {{- with .Latest}}
@@ -78,11 +92,12 @@
 <dt>Tags</dt><dd class="valeur" data-field="tags">{{.Tags}}</dd>
 {{- end}}
 <dt>Dernier Relevé</dt><dd data-field="releve">{{.ReleveAt}}</dd>
-<dt>Groupe</dt><dd><form method="post" action="/stores/{{.Name}}/groupe"><select name="groupe" aria-label="Groupe de {{.Name}}">
+<dt>Groupe</dt><dd><form method="post" action="/stores/{{chemin .Name}}/groupe"><select name="groupe" aria-label="Groupe de {{.Name}}">
 {{- range .Choix}}<option value="{{.Cle}}"{{if eq .Cle $r.Groupe}} selected{{end}}>{{.Nom}}</option>{{end}}
 </select> <button>Ranger</button></form></dd>
+<dt>Ordre</dt><dd><form method="post" action="/stores/{{chemin .Name}}/ordre" class="ordre"><button name="sens" value="haut" aria-label="Monter {{.Name}}"{{if .Premier}} disabled{{end}}>↑ Monter</button> <button name="sens" value="bas" aria-label="Descendre {{.Name}}"{{if .Dernier}} disabled{{end}}>↓ Descendre</button></form></dd>
 <dt>Seuil de retard</dt><dd><span data-field="seuil">{{.Seuil}}</span>
-<form method="post" action="/stores/{{.Name}}/seuil"><input name="seuil" value="{{.SeuilInput}}" placeholder="par défaut" aria-label="Seuil de retard de {{.Name}}" size="6"> <button>Modifier</button></form>
+<form method="post" action="/stores/{{chemin .Name}}/seuil"><input name="seuil" value="{{.SeuilInput}}" placeholder="par défaut" aria-label="Seuil de retard de {{.Name}}" size="6"> <button>Modifier</button></form>
 <span class="erreur" data-field="seuil-error">{{.SeuilError}}</span></dd>
 {{- with .PortMessage}}
 <dt>Exploration</dt><dd class="erreur" data-field="port-message">{{.}}</dd>

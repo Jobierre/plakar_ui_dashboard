@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -31,6 +32,9 @@ var templates embed.FS
 var static embed.FS
 
 var page = template.Must(template.New("dashboard.html").Funcs(template.FuncMap{
+	// chemin échappe un nom de Store ou de Groupe pour un segment d'adresse :
+	// un « / » dans le nom n'y ouvre pas un nouveau segment.
+	"chemin": url.PathEscape,
 	// ecartDe prépare le bloc « ecart » : un Écart, le champ qui le nomme et
 	// la description du Snapshot précédent, en infobulle.
 	"ecartDe": func(field string, e *ecart, previous string) any {
@@ -135,22 +139,71 @@ func Handler(c Dashboard) http.Handler {
 	mux.HandleFunc("POST /groupes", func(w http.ResponseWriter, r *http.Request) {
 		nom := r.FormValue("nom")
 		if err := c.Catalogue.CreerGroupe(nom); err != nil {
-			c.refuserRangement(w, r, err, &rangementRefused{Err: err.Error(), Nom: nom, Creation: true})
+			c.refuserRangement(w, r, err, cibleRangement{}, &rangementRefused{Nom: nom, Creation: true})
+			return
+		}
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	})
+	mux.HandleFunc("POST /groupes/{groupe}/nom", func(w http.ResponseWriter, r *http.Request) {
+		groupe, nom := r.PathValue("groupe"), r.FormValue("nom")
+		if err := c.Catalogue.RenommerGroupe(groupe, nom); err != nil {
+			c.refuserRangement(w, r, err, cibleRangement{Groupe: groupe}, &rangementRefused{Nom: nom, Renommage: groupe})
+			return
+		}
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	})
+	mux.HandleFunc("POST /groupes/{groupe}/suppression", func(w http.ResponseWriter, r *http.Request) {
+		groupe := r.PathValue("groupe")
+		if err := c.Catalogue.SupprimerGroupe(groupe); err != nil {
+			c.refuserRangement(w, r, err, cibleRangement{Groupe: groupe}, &rangementRefused{})
+			return
+		}
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	})
+	mux.HandleFunc("POST /groupes/{groupe}/ordre", func(w http.ResponseWriter, r *http.Request) {
+		cible := cibleRangement{Groupe: r.PathValue("groupe")}
+		// Un champ « avant » place le Groupe avant ce Groupe, ou en dernier
+		// s'il est vide (le glisser-déposer) ; sinon, « sens » le déplace
+		// d'une place (↑/↓).
+		var err error
+		if avant, ok := champ(r, "avant"); ok {
+			cible.Avant = avant
+			err = c.Catalogue.PlacerGroupe(cible.Groupe, avant)
+		} else if sens, ok := sensDe(r.FormValue("sens")); ok {
+			err = c.Catalogue.DeplacerGroupe(cible.Groupe, sens)
+		} else {
+			err = errSensInconnu
+		}
+		if err != nil {
+			c.refuserRangement(w, r, err, cible, &rangementRefused{})
 			return
 		}
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	})
 	mux.HandleFunc("POST /stores/{store}/groupe", func(w http.ResponseWriter, r *http.Request) {
-		store, nom := r.PathValue("store"), r.FormValue("groupe")
-		if err := c.Catalogue.Ranger(store, nom); err != nil {
-			msg := err.Error()
-			switch {
-			case errors.Is(err, catalogue.ErrUnknownGroupe):
-				msg = fmt.Sprintf("Le Groupe « %s » n'existe pas.", nom)
-			case errors.Is(err, catalogue.ErrUnknownStore):
-				msg = fmt.Sprintf("Le Store « %s » n'existe pas.", store)
-			}
-			c.refuserRangement(w, r, err, &rangementRefused{Err: msg})
+		cible := cibleRangement{Store: r.PathValue("store"), Groupe: r.FormValue("groupe")}
+		// Un champ « avant » place le Store avant ce Store, ou à la fin s'il
+		// est vide (le glisser-déposer). Sans lui (la liste déroulante), un
+		// Store déjà dans ce Groupe garde sa place.
+		ranger := func() error { return c.Catalogue.Ranger(cible.Store, cible.Groupe) }
+		if avant, ok := champ(r, "avant"); ok {
+			cible.Avant = avant
+			ranger = func() error { return c.Catalogue.Placer(cible.Store, cible.Groupe, avant) }
+		}
+		if err := ranger(); err != nil {
+			c.refuserRangement(w, r, err, cible, &rangementRefused{})
+			return
+		}
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	})
+	mux.HandleFunc("POST /stores/{store}/ordre", func(w http.ResponseWriter, r *http.Request) {
+		store := r.PathValue("store")
+		err := errSensInconnu
+		if sens, ok := sensDe(r.FormValue("sens")); ok {
+			err = c.Catalogue.DeplacerStore(store, sens)
+		}
+		if err != nil {
+			c.refuserRangement(w, r, err, cibleRangement{Store: store}, &rangementRefused{})
 			return
 		}
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -198,19 +251,67 @@ func Handler(c Dashboard) http.Handler {
 	return http.NewCrossOriginProtection().Handler(mux)
 }
 
-// refuserRangement renvoie la page avec le refus d'une action de rangement :
-// un nom refusé ou un Groupe ou Store inconnu est la faute de la requête, un
-// autre échec (l'enregistrement) celle du service.
-func (c Dashboard) refuserRangement(w http.ResponseWriter, r *http.Request, err error, refus *rangementRefused) {
-	status := http.StatusInternalServerError
+// cibleRangement est ce que vise une action de rangement : un Store, un
+// Groupe (ou SansGroupe), et le Store ou le Groupe avant lequel placer.
+type cibleRangement struct {
+	Store, Groupe, Avant string
+}
+
+// refuserRangement renvoie la page avec le refus d'une action de rangement
+// sur cette cible ; le dépliage du Store visé s'ouvre.
+func (c Dashboard) refuserRangement(w http.ResponseWriter, r *http.Request, err error, cible cibleRangement, refus *rangementRefused) {
+	status, msg := expliquer(err, cible)
+	refus.Err, refus.Store = msg, cible.Store
+	c.render(w, r, status, view{rangement: refus})
+}
+
+// expliquer donne le code et le message du refus d'une action de rangement
+// sur cette cible : un nom refusé, « Sans groupe » visé ou un sens inconnu
+// sont la faute de la requête (400), un Groupe ou un Store inconnu aussi
+// (404), un autre échec (l'enregistrement) celle du service (500).
+func expliquer(err error, cible cibleRangement) (int, string) {
+	affiche := func(groupe string) string {
+		if groupe == catalogue.SansGroupe {
+			return sansGroupeNom
+		}
+		return groupe
+	}
 	var nom *catalogue.NomRefuse
 	switch {
-	case errors.As(err, &nom):
-		status = http.StatusBadRequest
-	case errors.Is(err, catalogue.ErrUnknownGroupe), errors.Is(err, catalogue.ErrUnknownStore):
-		status = http.StatusNotFound
+	case errors.As(err, &nom), errors.Is(err, errSensInconnu), errors.Is(err, catalogue.ErrSansGroupeFixe):
+		return http.StatusBadRequest, err.Error()
+	case errors.Is(err, catalogue.ErrPositionInconnue) && cible.Store != "":
+		return http.StatusNotFound, fmt.Sprintf("Le Store « %s » n'est pas dans « %s ».", cible.Avant, affiche(cible.Groupe))
+	case errors.Is(err, catalogue.ErrPositionInconnue):
+		return http.StatusNotFound, fmt.Sprintf("Le Groupe « %s » n'existe pas.", cible.Avant)
+	case errors.Is(err, catalogue.ErrUnknownGroupe):
+		return http.StatusNotFound, fmt.Sprintf("Le Groupe « %s » n'existe pas.", cible.Groupe)
+	case errors.Is(err, catalogue.ErrUnknownStore):
+		return http.StatusNotFound, fmt.Sprintf("Le Store « %s » n'existe pas.", cible.Store)
 	}
-	c.render(w, r, status, view{rangement: refus})
+	return http.StatusInternalServerError, err.Error()
+}
+
+// champ renvoie la valeur d'un champ du formulaire, et s'il est présent, même
+// vide.
+func champ(r *http.Request, nom string) (string, bool) {
+	v := r.FormValue(nom) // analyse le formulaire
+	_, ok := r.Form[nom]
+	return v, ok
+}
+
+// errSensInconnu refuse un déplacement ni vers le haut, ni vers le bas.
+var errSensInconnu = errors.New("Sens de déplacement inconnu.")
+
+// sensDe lit le sens d'un déplacement : « haut » (↑) ou « bas » (↓).
+func sensDe(texte string) (catalogue.Sens, bool) {
+	switch texte {
+	case "haut":
+		return catalogue.Haut, true
+	case "bas":
+		return catalogue.Bas, true
+	}
+	return 0, false
 }
 
 // seuilRefused est un Seuil de retard refusé, à signaler sur la ligne de son
@@ -250,11 +351,16 @@ type view struct {
 }
 
 // rangementRefused est une action de rangement refusée : son message, et le
-// nom de Groupe refusé s'il s'agit d'une création.
+// nom de Groupe refusé s'il s'agit d'une création ou d'un renommage.
 type rangementRefused struct {
 	Err, Nom string
 	// Creation : le refus porte sur « + Groupe », dont le formulaire s'ouvre.
 	Creation bool
+	// Store désigne le Store visé, dont le dépliage s'ouvre.
+	Store string
+	// Renommage désigne le Groupe dont le renommage est refusé : son menu ⋯
+	// s'ouvre, avec le nom refusé.
+	Renommage string
 }
 
 // sansGroupeNom est le nom affiché de « Sans groupe ».
@@ -268,6 +374,13 @@ type section struct {
 	Voyant    string
 	Compteurs []compteur
 	Rows      []row
+	// Fixe marque « Sans groupe », qui ne se renomme, ne se supprime ni ne
+	// se déplace. Premier et Dernier désactivent ↑ et ↓.
+	Fixe, Premier, Dernier bool
+	// MenuOuvert ouvre le menu ⋯ sur un renommage refusé, avec NomSaisi, le
+	// nom refusé, dans son champ.
+	MenuOuvert bool
+	NomSaisi   string
 }
 
 // choixGroupe est un rangement proposé par la liste déroulante « Groupe ».
@@ -320,6 +433,9 @@ func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, v 
 				line.SeuilInput, line.SeuilError = v.seuil.text, v.seuil.err
 				line.Open = true
 			}
+			if v.rangement != nil && v.rangement.Store == e.Name {
+				line.Open = true
+			}
 			if v.exploration != nil && v.exploration.store == e.Name {
 				line.ExplorationError = v.exploration.err
 				line.Open = true
@@ -343,14 +459,23 @@ func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, v 
 			rows[i].Choix = choix
 			rows[i].Groupe = cle
 		}
-		sections = append(sections, section{Cle: cle, Nom: nom, Voyant: pire(duGroupe), Compteurs: compteurs(duGroupe), Rows: rows})
+		if len(rows) > 0 {
+			rows[0].Premier, rows[len(rows)-1].Dernier = true, true
+		}
+		s := section{Cle: cle, Nom: nom, Voyant: pire(duGroupe), Compteurs: compteurs(duGroupe), Rows: rows, NomSaisi: nom}
+		if v.rangement != nil && v.rangement.Renommage == cle {
+			s.MenuOuvert, s.NomSaisi = true, v.rangement.Nom
+		}
+		sections = append(sections, s)
 	}
-	for _, g := range groupes {
+	for i, g := range groupes {
 		add(g.Nom, g.Nom, g.Stores)
+		sections[i].Premier, sections[i].Dernier = i == 0, i == len(groupes)-1
 	}
 	// « Sans groupe » vient en dernier, et seulement s'il a des Stores.
 	if len(sans) > 0 {
 		add(catalogue.SansGroupe, sansGroupeNom, sans)
+		sections[len(sections)-1].Fixe = true
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	// La page porte les jetons des Explorations en cours, et la sortie d'une
@@ -394,8 +519,10 @@ type row struct {
 	Index   int
 	Pending bool
 	// Groupe désigne le rangement du Store, Choix ceux qu'on peut lui donner.
-	Groupe string
-	Choix  []choixGroupe
+	// Premier et Dernier désactivent ↑ et ↓ dans son Groupe.
+	Groupe           string
+	Premier, Dernier bool
+	Choix            []choixGroupe
 	// EnCours indique qu'un Relevé du Store est en cours ; ReleveAt est
 	// l'heure du dernier Relevé terminé, vide s'il n'y en a pas.
 	EnCours  bool
