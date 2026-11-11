@@ -198,6 +198,6 @@ Rien ne change sur ce que le service mesure. L'État, le Relevé, l'Écart et le
 ## Further Notes
 
 - **Vocabulaire fixé pendant la conception** (voir `GLOSSARY.md`) : on dit « Relevé » et non « sync », « État » et non « décalage », « Store disparu » et non « Store fantôme ».
-- **Tickets** : `issues/01-refonte-ui.md` (interface, vues, bandeau, Tout relever, rafraîchissement ; stories 1 à 30, et 67 à 69 pour ce qui le concerne), puis `issues/02-groupes.md` (Groupes, focus, Stores disparus ; stories 31 à 66, 70), bloqué par le 01. Dans le ticket 01, il n'y a pas encore de Groupes : la vue simple affiche une grille de tuiles et la vue détaillée une seule liste, dans l'ordre des noms.
+- **Tickets** : neuf tranches verticales dans `issues/`, de `01` (Feuille de style, voyant et bandeau) à `09` (Glisser-déposer et repli des Groupes). Les tickets 01 à 04 ne connaissent pas encore les Groupes : la page reste une seule liste, dans l'ordre des noms.
 - Cette spec remplace la section « Interface » et les stories 63 à 90 ajoutées le 2026-11-11 à `.scratch/plakar-ui/spec.md`, qui renvoie maintenant ici.
 - **Sécurité, rappel du prototype** : une revue automatique a relevé une injection possible dans le prototype (un nom de Groupe lu dans l'adresse et inséré comme du HTML). Les templates Go échappent déjà tout. Le seul risque restant est le script, d'où la story 68 et la règle `textContent`.
