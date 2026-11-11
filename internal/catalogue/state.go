@@ -49,9 +49,9 @@ type savedReleve struct {
 	Error    string           `json:"error,omitempty"`
 }
 
-// load reprend l'état des Stores du Catalogue. L'état des Stores qui ne sont
-// plus dans la config plakar est ignoré, et disparaît à l'enregistrement
-// suivant.
+// load reprend l'état des Stores du Catalogue, et le Seuil des Stores
+// disparus. Le reste de l'état des noms qui ne sont plus dans la config plakar
+// est ignoré, et disparaît à l'enregistrement suivant.
 func (c *Catalogue) load() error {
 	raw, err := os.ReadFile(c.path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -69,7 +69,8 @@ func (c *Catalogue) load() error {
 	}
 	c.sansGroupe = slices.Clone(f.SansGroupe)
 	for name, s := range f.Stores {
-		if !slices.Contains(c.names, name) {
+		present := slices.Contains(c.names, name)
+		if !present && !c.disparu(name) {
 			continue
 		}
 		if s.Seuil != "" {
@@ -78,6 +79,10 @@ func (c *Catalogue) load() error {
 				return fmt.Errorf("Store %s : %w", name, err)
 			}
 			c.seuils[name] = d
+		}
+		// Un Store disparu n'a ni port, ni Relevé.
+		if !present {
+			continue
 		}
 		if s.Port != 0 {
 			c.ports[name] = s.Port
@@ -100,6 +105,12 @@ func (c *Catalogue) save() error {
 	f := stateFile{Stores: map[string]storeState{}, Groupes: []savedGroupe{}, SansGroupe: append([]string{}, c.sansGroupe...)} // [] et non null, même vide
 	for _, g := range c.groupes {
 		f.Groupes = append(f.Groupes, savedGroupe{Nom: g.nom, Stores: slices.Clone(g.membres)})
+	}
+	// Seul le Seuil d'un Store disparu est gardé.
+	for name, d := range c.seuils {
+		if c.disparu(name) {
+			f.Stores[name] = storeState{Seuil: etat.FormatSeuil(d)}
+		}
 	}
 	for _, name := range c.names {
 		var s storeState

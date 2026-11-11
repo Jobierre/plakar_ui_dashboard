@@ -222,6 +222,14 @@ func Handler(c Dashboard) http.Handler {
 		}
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	})
+	mux.HandleFunc("POST /stores/{store}/retrait", func(w http.ResponseWriter, r *http.Request) {
+		store := r.PathValue("store")
+		if err := c.Catalogue.RetirerDisparu(store); err != nil {
+			c.refuserRangement(w, r, err, cibleRangement{Store: store}, &rangementRefused{})
+			return
+		}
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	})
 	mux.HandleFunc("POST /stores/{store}/exploration", func(w http.ResponseWriter, r *http.Request) {
 		name := r.PathValue("store")
 		e, ok := c.Catalogue.Entry(name)
@@ -280,8 +288,9 @@ func (c Dashboard) refuserRangement(w http.ResponseWriter, r *http.Request, err 
 }
 
 // expliquer donne le code et le message du refus d'une action de rangement
-// sur cette cible : un nom refusé, « Sans groupe » visé ou un sens inconnu
-// sont la faute de la requête (400), un Groupe ou un Store inconnu aussi
+// sur cette cible : un nom refusé, « Sans groupe » visé, un sens inconnu ou
+// un Store de la config visé comme Store disparu sont la faute de la requête
+// (400), un Groupe ou un Store inconnu aussi
 // (404), un autre échec (l'enregistrement) celle du service (500).
 func expliquer(err error, cible cibleRangement) (int, string) {
 	affiche := func(groupe string) string {
@@ -294,6 +303,8 @@ func expliquer(err error, cible cibleRangement) (int, string) {
 	switch {
 	case errors.As(err, &nom), errors.Is(err, errSensInconnu), errors.Is(err, catalogue.ErrSansGroupeFixe):
 		return http.StatusBadRequest, err.Error()
+	case errors.Is(err, catalogue.ErrPasDisparu):
+		return http.StatusBadRequest, fmt.Sprintf("Le Store « %s » est dans la config Plakar : il se range, il ne se retire pas.", cible.Store)
 	case errors.Is(err, catalogue.ErrPositionInconnue) && cible.Store != "":
 		return http.StatusNotFound, fmt.Sprintf("Le Store « %s » n'est pas dans « %s ».", cible.Avant, affiche(cible.Groupe))
 	case errors.Is(err, catalogue.ErrPositionInconnue):
@@ -402,6 +413,8 @@ type section struct {
 	// cours : le bandeau les additionne sur les Groupes affichés.
 	parEtat [etat.Injoignable + 1]int
 	enCours int
+	// disparus compte ses Stores disparus.
+	disparus int
 }
 
 // choixGroupe est un rangement proposé par la liste déroulante « Groupe ».
@@ -430,6 +443,13 @@ func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, v 
 	newRows := func(s *section, entries []catalogue.Entry) {
 		s.Rows = make([]row, 0, len(entries))
 		for _, e := range entries {
+			if e.Disparu {
+				// Ni État, ni valeurs : seulement sa place, et le ménage.
+				s.Rows = append(s.Rows, row{Name: e.Name, Index: index, Disparu: true})
+				index++
+				s.disparus++
+				continue
+			}
 			line := c.newRow(e, now)
 			line.Index = index
 			index++
@@ -505,13 +525,16 @@ func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, v 
 	}
 	// Le bandeau ne compte que les Stores affichés.
 	var parEtat [etat.Injoignable + 1]int
-	enCours, total := 0, 0
+	// total ne compte que les Stores qu'un Relevé peut viser : pas les
+	// Stores disparus.
+	enCours, total, disparus := 0, 0, 0
 	for _, s := range sections {
 		for st, n := range s.parEtat {
 			parEtat[st] += n
 		}
 		enCours += s.enCours
-		total += len(s.Rows)
+		total += len(s.Rows) - s.disparus
+		disparus += s.disparus
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	// La page porte les jetons des Explorations en cours, et la sortie d'une
@@ -521,6 +544,8 @@ func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, v 
 	data := struct {
 		User      string
 		Compteurs []compteur
+		// Disparus compte les Stores disparus affichés : le ménage à faire.
+		Disparus int
 		// ToutEnCours : chaque Store a déjà un Relevé en cours, « Tout
 		// relever » n'aurait rien à lancer.
 		ToutEnCours bool
@@ -541,6 +566,7 @@ func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, v 
 	}{
 		User:         acces.User(r.Context()),
 		Compteurs:    compteurs(parEtat),
+		Disparus:     disparus,
 		ToutEnCours:  enCours == total,
 		Rafraichir:   v.accueil && enCours > 0,
 		Groupes:      sections,
@@ -557,6 +583,8 @@ func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, v 
 // row est une ligne du tableau de bord, prête à afficher.
 type row struct {
 	Name string
+	// Disparu marque un Store disparu, qui n'a que son nom et sa place.
+	Disparu bool
 	// Index numérote le Store dans la page, pour nommer ses formulaires.
 	Index   int
 	Pending bool

@@ -381,3 +381,21 @@ pre.terminal {
 .focus { margin: 0 0 12px; }
 .groupe-entete h2 a { color: inherit; text-decoration: none; }
 .groupe-entete h2 a:hover { text-decoration: underline; }
+
+/* Store disparu : retiré de la config Plakar, il garde sa place, grisé, sans
+   État ni valeurs. Il n'a pas de dépliage : seul « Retirer du groupe » reste,
+   visible dans les deux vues. */
+.stores .disparu { opacity: .55; }
+.stores .disparu .ligne { cursor: default; }
+.stores .disparu .nom { text-decoration: line-through; }
+.stores .disparu .mention { display: block; color: var(--muted); font-size: 12.5px; }
+.stores .disparu form { margin: 0; }
+.vue-detaillee .stores .disparu .c-nom { grid-column: span 5; }
+.vue-detaillee .stores .disparu:last-child > .ligne { border-bottom: 0; }
+.vue-simple .store.disparu { border-left-style: dashed; }
+.vue-simple .store.disparu .ligne { grid-template-areas: "etat nom" "actions actions"; }
+.vue-simple .store.disparu .c-actions { display: flex; grid-area: actions; margin-top: 6px; }
+.vue-simple .store.disparu .c-etat { grid-area: etat; }
+.vue-simple .store.disparu:hover { border-color: var(--line); }
+.bandeau .compteur-disparus { margin: 0; color: var(--muted); }
+.bandeau .compteur-disparus [data-compteur] { font-weight: 600; }

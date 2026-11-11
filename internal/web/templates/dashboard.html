@@ -18,6 +18,9 @@
 <li><span class="voyant {{.Voyant}}" aria-hidden="true"></span> <span data-compteur="{{.Voyant}}">{{.N}}</span> {{.Etat}}</li>
 {{- end}}
 </ul>
+{{- with .Disparus}}
+<p class="compteur-disparus" title="Stores retirés de la config Plakar, encore rangés dans un Groupe"><span aria-hidden="true">👻</span> <span data-compteur="disparu">{{.}}</span> Store{{if gt . 1}}s{{end}} supprimé{{if gt . 1}}s{{end}}</p>
+{{- end}}
 <details class="nouveau-groupe" data-nouveau-groupe{{with .Rangement}}{{if .Creation}} open{{end}}{{end}}>
 <summary>+ Groupe</summary>
 <form method="post" action="/groupes"><input name="nom" value="{{with .Rangement}}{{.Nom}}{{end}}" placeholder="Nom du Groupe" aria-label="Nom du nouveau Groupe" required> <button>Créer</button></form>
@@ -65,6 +68,15 @@
 <div class="membres">
 <div class="entete" aria-hidden="true"><span>État</span><span>Store</span><span>Dernier snapshot</span><span>Taille</span><span>Écart</span><span>Relevé</span><span></span></div>
 {{- range $r := .Rows}}{{$i := .Index}}
+{{- if .Disparu}}
+<div class="store disparu" data-store="{{.Name}}" data-disparu>
+<div class="ligne">
+<span class="c-etat etat"><span aria-hidden="true">👻</span></span>
+<span class="c-nom"><span class="nom">{{.Name}}</span><span class="mention" data-disparu-mention>Store supprimé</span></span>
+<span class="c-actions"><form method="post" action="/stores/{{chemin .Name}}/retrait"><button title="Oublier ce Store, Seuil compris">Retirer du groupe</button></form></span>
+</div>
+</div>
+{{- else}}
 <details class="store{{with .Voyant}} bord-{{.}}{{end}}{{if .Perime}} perime{{end}}" data-store="{{.Name}}"{{if .Pending}} data-pending{{end}}{{if .Open}} open{{end}}>
 <summary class="ligne" data-ligne>
 <span class="c-etat etat">{{with .Voyant}}<span class="voyant {{.}}" data-field="voyant" data-etat="{{.}}" aria-hidden="true"></span> {{end}}<span data-field="etat">{{.Etat}}</span></span>
@@ -116,6 +128,7 @@
 </dl>
 </div>
 </details>
+{{- end}}
 {{- else}}
 <p class="vide">Aucun Store dans ce Groupe.</p>
 {{- end}}

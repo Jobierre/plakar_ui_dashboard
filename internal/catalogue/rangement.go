@@ -3,6 +3,7 @@ package catalogue
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 )
@@ -22,17 +23,17 @@ type NomRefuse struct {
 func (e *NomRefuse) Error() string { return e.Raison }
 
 // reconcilier accorde le rangement à la liste des Stores de la config : un
-// Store retiré quitte son Groupe ou « Sans groupe », un Store rangé deux fois
-// ne garde que sa première place, et un Store rangé nulle part va à la fin de
-// « Sans groupe », par ordre de nom. Il dit si le rangement a changé. Il faut
-// tenir c.mu.
+// Store retiré reste dans son Groupe comme Store disparu, mais quitte « Sans
+// groupe » ; un nom rangé deux fois ne garde que sa première place, et un
+// Store rangé nulle part va à la fin de « Sans groupe », par ordre de nom. Il
+// dit si le rangement a changé. Il faut tenir c.mu.
 func (c *Catalogue) reconcilier() bool {
 	changed := false
 	place := map[string]bool{}
-	garder := func(membres []string) []string {
+	garder := func(membres []string, gardeDisparus bool) []string {
 		out := membres[:0]
 		for _, name := range membres {
-			if place[name] || !slices.Contains(c.names, name) {
+			if place[name] || !gardeDisparus && !slices.Contains(c.names, name) {
 				changed = true
 				continue
 			}
@@ -42,9 +43,9 @@ func (c *Catalogue) reconcilier() bool {
 		return out
 	}
 	for i := range c.groupes {
-		c.groupes[i].membres = garder(c.groupes[i].membres)
+		c.groupes[i].membres = garder(c.groupes[i].membres, true)
 	}
-	c.sansGroupe = garder(c.sansGroupe)
+	c.sansGroupe = garder(c.sansGroupe, false)
 	nouveaux := slices.DeleteFunc(slices.Clone(c.names), func(name string) bool { return place[name] })
 	slices.Sort(nouveaux)
 	if len(nouveaux) > 0 {
@@ -54,19 +55,23 @@ func (c *Catalogue) reconcilier() bool {
 	return changed
 }
 
-// ranger applique un changement du rangement et l'enregistre. Si le
-// changement est refusé ou si l'enregistrement échoue, le rangement n'est pas
-// changé : un rangement n'est jamais à moitié fait.
+// ranger applique un changement du rangement et l'enregistre. Un Store
+// disparu qui quitte son Groupe est oublié, Seuil compris. Si le changement
+// est refusé ou si l'enregistrement échoue, rien n'est changé : un rangement
+// n'est jamais à moitié fait.
 func (c *Catalogue) ranger(change func() error) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	groupes, sans := c.cloneRangement()
+	seuils := maps.Clone(c.seuils)
+	annuler := func() { c.groupes, c.sansGroupe, c.seuils = groupes, sans, seuils }
 	if err := change(); err != nil {
-		c.groupes, c.sansGroupe = groupes, sans
+		annuler()
 		return err
 	}
+	c.oublierSeuils()
 	if err := c.save(); err != nil {
-		c.groupes, c.sansGroupe = groupes, sans
+		annuler()
 		return fmt.Errorf("rangement non enregistré : %w", err)
 	}
 	return nil
@@ -306,22 +311,43 @@ func (c *Catalogue) RenommerGroupe(nom, nouveau string) error {
 }
 
 // SupprimerGroupe supprime le Groupe et envoie ses Stores à la fin de « Sans
-// groupe », dans leur ordre, et l'enregistre.
+// groupe », dans leur ordre, et l'enregistre. Ses Stores disparus sont
+// oubliés, Seuil compris.
 func (c *Catalogue) SupprimerGroupe(nom string) error {
 	return c.ranger(func() error {
 		i, err := c.groupeVise(nom)
 		if err != nil {
 			return err
 		}
-		c.sansGroupe = append(c.sansGroupe, c.groupes[i].membres...)
+		c.sansGroupe = append(c.sansGroupe, slices.DeleteFunc(slices.Clone(c.groupes[i].membres), c.disparu)...)
 		c.groupes = slices.Delete(c.groupes, i, i+1)
 		return nil
 	})
 }
 
+// ErrPasDisparu signale un Store de la config visé comme Store disparu : il se
+// range, il ne se retire pas.
+var ErrPasDisparu = errors.New("pas un Store disparu")
+
+// RetirerDisparu retire le Store disparu de son Groupe, l'oublie, Seuil
+// compris, et l'enregistre. Un Store de la config est refusé par
+// ErrPasDisparu, un nom inconnu par ErrUnknownStore.
+func (c *Catalogue) RetirerDisparu(store string) error {
+	return c.ranger(func() error {
+		switch {
+		case slices.Contains(c.names, store):
+			return ErrPasDisparu
+		case !c.disparu(store):
+			return ErrUnknownStore
+		}
+		c.retirer(store)
+		return nil
+	})
+}
+
 // Membres renvoie les Stores du Groupe qui porte ce nom, ou de « Sans groupe »
-// (SansGroupe), dans l'ordre. Un Groupe inconnu est refusé par
-// ErrUnknownGroupe.
+// (SansGroupe), dans l'ordre, sans ses Stores disparus. Un Groupe inconnu est
+// refusé par ErrUnknownGroupe.
 func (c *Catalogue) Membres(nom string) ([]string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -332,5 +358,5 @@ func (c *Catalogue) Membres(nom string) ([]string, error) {
 	if i < 0 {
 		return nil, ErrUnknownGroupe
 	}
-	return slices.Clone(c.groupes[i].membres), nil
+	return slices.DeleteFunc(slices.Clone(c.groupes[i].membres), c.disparu), nil
 }

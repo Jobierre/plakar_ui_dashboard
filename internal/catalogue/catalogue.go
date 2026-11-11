@@ -33,7 +33,8 @@ type Catalogue struct {
 	dernier Jeton
 	// groupes sont les Groupes, dans l'ordre, et sansGroupe les Stores rangés
 	// nulle part, dans l'ordre. Chaque Store de la config est dans l'un des
-	// deux, une seule fois.
+	// deux, une seule fois. Un membre de Groupe absent de la config est un
+	// Store disparu ; « Sans groupe » n'en a jamais.
 	groupes    []groupe
 	sansGroupe []string
 }
@@ -68,6 +69,10 @@ type Entry struct {
 	EnCours bool
 	// Port est le port d'Exploration du Store, 0 si la plage est épuisée.
 	Port int
+	// Disparu marque un Store disparu : retiré de la config plakar alors qu'il
+	// était rangé dans un Groupe. Il n'a ni Relevé, ni port ; seul son Seuil
+	// est gardé.
+	Disparu bool
 }
 
 // ErrUnknownStore signale un Store absent du Catalogue.
@@ -160,26 +165,45 @@ func (c *Catalogue) Record(name string, j Jeton, r releve.Result) error {
 }
 
 // SetStores remplace la liste des Stores par celle-ci, lue dans la config
-// plakar, dans cet ordre. Un Store retiré perd son Seuil, son dernier Relevé
-// et son port, qui disparaissent du fichier d'état ; un Store ajouté n'a
-// encore aucun Relevé, et reçoit un port. La liste est changée même si l'enregistrement échoue : la
-// config plakar fait foi, et le fichier d'état sera repris à l'enregistrement
-// suivant.
+// plakar, dans cet ordre. Un Store retiré perd son dernier Relevé et son port,
+// qui disparaissent du fichier d'état ; rangé dans un Groupe, il y reste comme
+// Store disparu et garde son Seuil, sinon il perd aussi son Seuil. Un Store
+// ajouté n'a encore aucun Relevé, et reçoit un port ; s'il était un Store
+// disparu, il reprend sa place et son Seuil. La liste est changée même si
+// l'enregistrement échoue : la config plakar fait foi, et le fichier d'état
+// sera repris à l'enregistrement suivant.
 func (c *Catalogue) SetStores(names []string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.names = slices.Clone(names)
+	c.reconcilier()
 	removed := func(name string) bool { return !slices.Contains(names, name) }
 	maps.DeleteFunc(c.results, func(name string, _ releve.Result) bool { return removed(name) })
-	maps.DeleteFunc(c.seuils, func(name string, _ time.Duration) bool { return removed(name) })
+	c.oublierSeuils()
 	// Le port d'un Store retiré est libéré, et peut servir à un Store ajouté.
 	maps.DeleteFunc(c.ports, func(name string, _ int) bool { return removed(name) })
 	c.assignPorts()
-	c.reconcilier()
 	// Le Relevé en cours d'un Store retiré ne compte plus : s'il revient,
 	// sous une autre config peut-être, son premier Relevé est un nouveau.
 	maps.DeleteFunc(c.enCours, func(name string, _ Jeton) bool { return removed(name) })
 	return c.save()
+}
+
+// oublierSeuils oublie le Seuil de chaque nom qui n'est ni un Store, ni un
+// Store disparu. Il faut tenir c.mu.
+func (c *Catalogue) oublierSeuils() {
+	maps.DeleteFunc(c.seuils, func(name string, _ time.Duration) bool {
+		return !slices.Contains(c.names, name) && !c.disparu(name)
+	})
+}
+
+// disparu dit si ce nom est celui d'un Store disparu : membre d'un Groupe,
+// absent de la config. Il faut tenir c.mu.
+func (c *Catalogue) disparu(name string) bool {
+	if slices.Contains(c.names, name) {
+		return false
+	}
+	return slices.ContainsFunc(c.groupes, func(g groupe) bool { return slices.Contains(g.membres, name) })
 }
 
 // Abandon termine le Relevé en cours d'un Store sans en garder de résultat.
@@ -238,21 +262,28 @@ func (c *Catalogue) Entries() []Entry {
 	return entries
 }
 
-// entry renvoie le Store qui porte ce nom. Il faut tenir c.mu.
+// entry renvoie le Store, ou le Store disparu, qui porte ce nom. Il faut
+// tenir c.mu.
 func (c *Catalogue) entry(name string) Entry {
-	_, enCours := c.enCours[name]
-	e := Entry{Name: name, EnCours: enCours, Port: c.ports[name]}
-	if r, ok := c.results[name]; ok {
-		e.Releve = &r
-	}
+	e := Entry{Name: name}
 	if d, ok := c.seuils[name]; ok {
 		e.Seuil = &d
+	}
+	// Un Store disparu n'a que son Seuil.
+	if c.disparu(name) {
+		e.Disparu = true
+		return e
+	}
+	_, e.EnCours = c.enCours[name]
+	e.Port = c.ports[name]
+	if r, ok := c.results[name]; ok {
+		e.Releve = &r
 	}
 	return e
 }
 
-// Groupes renvoie les Groupes et leurs Stores, dans l'ordre, puis les Stores
-// « Sans groupe », dans l'ordre.
+// Groupes renvoie les Groupes et leurs Stores, Stores disparus compris, dans
+// l'ordre, puis les Stores « Sans groupe », dans l'ordre.
 func (c *Catalogue) Groupes() (groupes []Groupe, sansGroupe []Entry) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
