@@ -145,6 +145,7 @@ func Start(ctx context.Context, opts Options) (*App, error) {
 			Catalogue:    cat,
 			DefaultSeuil: cfg.DefaultSeuil,
 			Trigger:      plan.Trigger,
+			TriggerAll:   plan.TriggerAll,
 			Commande:     executeur.Run,
 			Explorations: expl,
 			Now:          opts.Now,

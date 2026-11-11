@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+{{- if .Rafraichir}}
+<meta http-equiv="refresh" content="5">
+{{- end}}
 <title>plakar-ui</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -14,6 +17,7 @@
 <li><span class="voyant {{.Voyant}}" aria-hidden="true"></span> <span data-compteur="{{.Voyant}}">{{.N}}</span> {{.Etat}}</li>
 {{- end}}
 </ul>
+<form method="post" action="/releve" class="tout-relever"><button class="primaire" data-tout-relever{{if .ToutEnCours}} disabled{{end}}><span aria-hidden="true">↻</span> Tout relever</button></form>
 <p class="utilisateur">Connecté en tant que <span id="utilisateur">{{.User}}</span></p>
 </header>
 <main>

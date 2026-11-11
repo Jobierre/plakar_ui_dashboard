@@ -37,6 +37,7 @@ func TestUnknownTailscaleIdentityIsForbiddenOnEveryRoute(t *testing.T) {
 		{http.MethodGet, "/"},
 		{http.MethodPost, "/stores/arr/releve"},
 		{http.MethodPost, "/stores/arr/seuil"},
+		{http.MethodPost, "/releve"},
 		// Une route ajoutée plus tard est couverte d'office.
 		{http.MethodGet, "/route-a-venir"},
 	} {
@@ -47,7 +48,7 @@ func TestUnknownTailscaleIdentityIsForbiddenOnEveryRoute(t *testing.T) {
 	}
 	_, rows := svc.dashboard()
 	if got := lsCalls(plakar, "arr"); got != 1 {
-		t.Errorf("%d Relevés de arr, attendu 1 : le ↻ refusé n'a rien lancé", got)
+		t.Errorf("%d Relevés de arr, attendu 1 : le ↻ et Tout relever refusés n'ont rien lancé", got)
 	}
 	assertRow(t, rows["arr"], row{"seuil": "26h (par défaut)"})
 }

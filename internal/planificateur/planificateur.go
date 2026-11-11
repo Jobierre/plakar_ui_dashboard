@@ -5,6 +5,7 @@ package planificateur
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"slices"
 	"sync"
@@ -142,6 +143,26 @@ func (p *Planificateur) Trigger(name string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.trigger(name)
+}
+
+// TriggerAll lance tout de suite un Relevé de chacun de ces Stores, comme
+// Trigger : un Store dont un Relevé est déjà en cours est sauté, et un Store
+// sorti du Catalogue entre-temps est ignoré. L'erreur est la première autre
+// erreur rencontrée ; les Stores suivants sont relevés malgré tout.
+func (p *Planificateur) TriggerAll(names []string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var first error
+	for _, name := range names {
+		err := p.trigger(name)
+		if errors.Is(err, catalogue.ErrUnknownStore) {
+			continue
+		}
+		if first == nil {
+			first = err
+		}
+	}
+	return first
 }
 
 // trigger est Trigger. Il faut tenir mu.

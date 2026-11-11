@@ -57,6 +57,7 @@ button {
 }
 button:hover:not(:disabled) { border-color: var(--accent); }
 button:disabled { opacity: .45; cursor: default; }
+button.primaire { background: var(--accent); border-color: var(--accent); color: #fff; }
 
 input {
   font: inherit;
@@ -101,7 +102,8 @@ form { display: inline; margin: 0; }
 .bandeau .compteurs { display: flex; flex-wrap: wrap; gap: 14px; margin: 0; padding: 0; list-style: none; }
 .bandeau .compteurs li { display: inline-flex; align-items: center; gap: 6px; }
 .bandeau .compteurs [data-compteur] { font-weight: 600; }
-.bandeau .utilisateur { margin: 0 0 0 auto; font-size: 12px; color: var(--muted); }
+.bandeau .tout-relever { margin: 0 0 0 auto; }
+.bandeau .utilisateur { margin: 0; font-size: 12px; color: var(--muted); }
 
 main { max-width: 1400px; margin: 18px auto; padding: 0 18px; }
 main h2 { font-size: 15px; }
@@ -194,7 +196,7 @@ pre.terminal {
 
 @media (max-width: 700px) {
   .bandeau { padding: 10px 14px; gap: 10px; }
-  .bandeau .utilisateur { margin-left: 0; }
+  .bandeau .tout-relever { margin-left: 0; }
   main { padding: 0 10px; }
   /* Chaque ligne s'empile en carte. */
   .stores .entete { display: none; }

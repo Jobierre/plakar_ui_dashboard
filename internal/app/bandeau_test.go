@@ -129,17 +129,18 @@ func findElement(t *testing.T, body string, match func(*html.Node) bool) *html.N
 	if err != nil {
 		t.Fatal(err)
 	}
-	var find func(*html.Node) *html.Node
-	find = func(n *html.Node) *html.Node {
-		if n.Type == html.ElementNode && match(n) {
-			return n
-		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			if found := find(c); found != nil {
-				return found
-			}
-		}
-		return nil
+	return findIn(doc, match)
+}
+
+// findIn renvoie le premier élément sous n qui vérifie match.
+func findIn(n *html.Node, match func(*html.Node) bool) *html.Node {
+	if n.Type == html.ElementNode && match(n) {
+		return n
 	}
-	return find(doc)
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if found := findIn(c, match); found != nil {
+			return found
+		}
+	}
+	return nil
 }

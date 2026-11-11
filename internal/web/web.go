@@ -50,6 +50,10 @@ type Dashboard struct {
 	// Trigger lance un Relevé immédiat d'un Store (bouton ↻), sans en
 	// attendre la fin.
 	Trigger func(store string) error
+	// TriggerAll lance un Relevé immédiat de chacun de ces Stores (bouton
+	// « Tout relever »), en sautant ceux dont un Relevé est déjà en cours et
+	// ceux sortis du Catalogue entre-temps.
+	TriggerAll func(stores []string) error
 	// Explorations lance, donne et arrête les Explorations des Stores.
 	Explorations Explorations
 	// Commande exécute une Commande de Store saisie dans son bloc.
@@ -77,7 +81,7 @@ type Explorations interface {
 func Handler(c Dashboard) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		c.render(w, r, http.StatusOK, view{})
+		c.render(w, r, http.StatusOK, view{accueil: true})
 	})
 	// La feuille de style et le script, derrière l'Accès comme le reste.
 	mux.Handle("GET /static/", http.FileServerFS(static))
@@ -113,6 +117,19 @@ func Handler(c Dashboard) http.Handler {
 			return
 		}
 		// La page montre alors le Relevé en cours.
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	})
+	mux.HandleFunc("POST /releve", func(w http.ResponseWriter, r *http.Request) {
+		entries := c.Catalogue.Entries()
+		names := make([]string, 0, len(entries))
+		for _, e := range entries {
+			names = append(names, e.Name)
+		}
+		if err := c.TriggerAll(names); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		// La page montre alors les Relevés en cours, et se rafraîchit seule.
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	})
 	mux.HandleFunc("POST /stores/{store}/exploration", func(w http.ResponseWriter, r *http.Request) {
@@ -184,7 +201,10 @@ type explorationRefused struct {
 
 // view est ce qu'une réponse ajoute au tableau de bord : un Seuil refusé, un
 // lancement d'Exploration en échec, ou le résultat d'une Commande de Store.
+// accueil marque la page d'accueil elle-même, et non la réponse directe à un
+// POST : seule elle peut se recharger sans perdre ce qu'elle affiche.
 type view struct {
+	accueil     bool
 	seuil       *seuilRefused
 	exploration *explorationRefused
 	commande    *commandeResult
@@ -197,8 +217,13 @@ func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, v 
 	rows := make([]row, 0)
 	// Injoignable est le dernier État.
 	var parEtat [etat.Injoignable + 1]int
+	// enCours compte les Stores dont un Relevé est en cours.
+	enCours := 0
 	for _, e := range c.Catalogue.Entries() {
 		line := c.newRow(e, now)
+		if line.EnCours {
+			enCours++
+		}
 		// Un Store sans Relevé terminé n'est compté nulle part.
 		if line.etat != nil {
 			parEtat[*line.etat]++
@@ -223,9 +248,24 @@ func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, v 
 	data := struct {
 		User      string
 		Compteurs []compteur
-		Rows      []row
-		Commande  *commandeResult
-	}{User: acces.User(r.Context()), Compteurs: compteurs(parEtat), Rows: rows, Commande: v.commande}
+		// ToutEnCours : chaque Store a déjà un Relevé en cours, « Tout
+		// relever » n'aurait rien à lancer.
+		ToutEnCours bool
+		// Rafraichir : au moins un Relevé est en cours, la page d'accueil se
+		// recharge seule pour en montrer le résultat. La réponse à un POST
+		// (refus, erreur, sortie de Commande) ne se recharge pas : elle
+		// perdrait son message.
+		Rafraichir bool
+		Rows       []row
+		Commande   *commandeResult
+	}{
+		User:        acces.User(r.Context()),
+		Compteurs:   compteurs(parEtat),
+		ToutEnCours: enCours == len(rows),
+		Rafraichir:  v.accueil && enCours > 0,
+		Rows:        rows,
+		Commande:    v.commande,
+	}
 	if err := page.Execute(w, data); err != nil {
 		c.Log.Error("rendu du tableau de bord", "err", err)
 	}
