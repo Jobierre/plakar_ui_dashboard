@@ -17,7 +17,8 @@ Le snapshot qui précède immédiatement le Dernier snapshot dans un Store.
 Variation de taille et de durée entre le Dernier snapshot et le Snapshot précédent. Simple indication pour l'œil : elle ne change pas l'État d'un Store.
 
 **Relevé**
-Interrogation périodique d'un Store par le service pour connaître son Dernier snapshot. Le résultat est conservé et affiché avec l'heure du Relevé. Le Store n'est pas gardé ouvert entre deux Relevés.
+Interrogation périodique d'un Store par le service pour connaître son Dernier snapshot. Le résultat est conservé et affiché avec l'heure du Relevé. Le Store n'est pas gardé ouvert entre deux Relevés. On peut relever un Store, ou tous les Stores à la fois.
+_À éviter_ : « sync », qui désigne chez Plakar la copie de snapshots entre Klosets, hors du périmètre du service.
 
 **Seuil de retard**
 Âge maximal toléré du Dernier snapshot d'un Store. Une valeur par défaut, modifiable Store par Store.
@@ -26,12 +27,20 @@ Interrogation périodique d'un Store par le service pour connaître son Dernier 
 - _À jour_ : le Dernier snapshot est plus récent que le Seuil de retard.
 - _En retard_ : le Dernier snapshot dépasse le Seuil de retard.
 - _Injoignable_ : le dernier Relevé a échoué (réseau, identifiants, kloset illisible).
+_À éviter_ : « décalage » pour parler de l'État ; « décalage » n'est pas l'Écart non plus.
 
 **Exploration**
 Ouverture, à la demande, de l'interface Plakar d'un Store pour parcourir ou restaurer ses snapshots. Chaque Store a un port d'Exploration attitré et stable. L'Exploration se ferme d'elle-même après une période d'inactivité.
 
 **Utilisateur autorisé**
 Identité Tailscale figurant dans la liste d'accès du service. Seul un Utilisateur autorisé voit le tableau de bord, lance une Exploration ou gère les Stores.
+
+**Groupe**
+Ensemble nommé de Stores, défini dans le service pour ranger le tableau de bord. Un Store appartient à au plus un Groupe ; les autres sont « Sans groupe ». L'ordre des Groupes, et celui des Stores dans chaque Groupe, est libre. Un Groupe n'a aucun effet sur l'État, le Relevé ou le Seuil de retard.
+
+**Store disparu**
+Nom d'un Store retiré de la configuration Plakar alors qu'il était rangé dans un Groupe. Le Groupe garde sa place et son Seuil de retard ; il n'a ni État ni Relevé. Il s'en va quand on le retire du Groupe, ou redevient un Store, à la même place, si un Store du même nom réapparaît.
+_À éviter_ : « Store fantôme ».
 
 **Commande de Store**
 Commande `plakar store …` saisie dans l'interface pour ajouter, modifier ou retirer un Store. Elle n'est jamais conservée.

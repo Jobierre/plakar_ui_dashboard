@@ -65,7 +65,7 @@ Un service léger, déployé en docker compose sur Unraid et accessible uniqueme
 34. En tant qu'Utilisateur autorisé, je veux pouvoir mettre une valeur entre guillemets (une passphrase avec des espaces), afin de saisir n'importe quelle passphrase.
 35. En tant qu'Utilisateur autorisé, je veux que mes Commandes de Store ne soient jamais journalisées ni conservées, afin que les passphrases qu'elles contiennent ne traînent nulle part.
 36. En tant qu'Utilisateur autorisé, je veux qu'un Store ajouté apparaisse aussitôt dans le tableau de bord, avec un premier Relevé lancé, afin de vérifier tout de suite qu'il fonctionne.
-37. En tant qu'Utilisateur autorisé, je veux qu'un Store retiré disparaisse du tableau de bord, afin que la liste reflète toujours la config Plakar.
+37. En tant qu'Utilisateur autorisé, je veux qu'un Store retiré disparaisse du tableau de bord, afin que la liste reflète toujours la config Plakar. Exception : un Store rangé dans un Groupe y reste comme Store disparu (voir stories 82 à 86).
 38. En tant qu'Utilisateur autorisé, je veux que tout Store de la config Plakar du service apparaisse sans déclaration supplémentaire, afin de n'avoir qu'une seule source de vérité.
 
 ### Explorations
@@ -101,6 +101,38 @@ Un service léger, déployé en docker compose sur Unraid et accessible uniqueme
 61. En tant que propriétaire du service, je veux régler les valeurs par défaut (Seuil de retard, intervalle de Relevé, inactivité d'Exploration, plage de ports) par variables d'environnement, afin d'adapter le service sans le recompiler.
 62. En tant que propriétaire du service, je veux que les journaux du service ne contiennent jamais de passphrase ni de jeton, afin de pouvoir les partager pour un diagnostic.
 
+### Interface (ticket 10)
+
+63. En tant qu'Utilisateur autorisé, je veux un voyant coloré à côté du mot de l'État (🟢 À jour, 🔴 En retard, 🟠 Injoignable), afin de repérer d'un coup d'œil ce qui demande mon attention, sans dépendre de la seule couleur.
+64. En tant qu'Utilisateur autorisé, je veux un bandeau en haut de page qui compte les Stores par État, afin de savoir sans faire défiler s'il y a un problème.
+65. En tant qu'Utilisateur autorisé, je veux un bouton « Tout relever » dans le bandeau, qui lance un Relevé de chaque Store, sauf ceux dont le Relevé est déjà en cours, afin de tout vérifier après une série de backups.
+66. En tant qu'Utilisateur autorisé, je veux que la page se rafraîchisse seule toutes les 5 s tant qu'un Relevé est en cours, et plus du tout ensuite, afin de voir le résultat sans recharger à la main.
+67. En tant qu'Utilisateur autorisé, je veux une ligne compacte par Store (voyant et État, nom, âge du Dernier snapshot, taille et Écart, heure du dernier Relevé, ↻, Explorer ou lien et Arrêter), avec le reste dans un dépliage (date exacte, ID, durée et Écart, source, tags, Seuil de retard, message de port), afin que la page reste lisible.
+68. En tant qu'Utilisateur autorisé, je veux que l'erreur d'un Store Injoignable soit visible sans déplier, et que ses dernières valeurs connues soient atténuées, afin de savoir qu'elles sont anciennes.
+69. En tant qu'Utilisateur autorisé, je veux que le dépliage d'un Store s'ouvre seul quand une action sur ce Store vient d'échouer (Seuil, Exploration), afin de voir l'erreur.
+70. En tant qu'Utilisateur autorisé, je veux voir l'Écart en texte neutre, signé, avec une flèche ↑/↓ et la valeur du Snapshot précédent en infobulle, sans couleur d'alerte, afin de ne pas le confondre avec l'État.
+71. En tant qu'Utilisateur autorisé, je veux que la Commande de Store soit rangée dans une section repliable « Gérer les Stores », ouverte d'elle-même quand un résultat s'affiche, afin qu'elle n'encombre pas le tableau de bord.
+72. En tant qu'Utilisateur autorisé, je veux une mise en page pensée pour l'écran du Mac, qui s'empile proprement sur un écran étroit (moins de 700 px), afin de pouvoir aussi consulter depuis un téléphone.
+73. En tant qu'Utilisateur autorisé, je veux un thème clair et un thème sombre qui suivent le réglage du système, afin de consulter confortablement le soir.
+
+### Groupes (ticket 11)
+
+74. En tant qu'Utilisateur autorisé, je veux ranger mes Stores dans des Groupes nommés, un Groupe au plus par Store, afin d'organiser le tableau de bord à ma façon.
+75. En tant qu'Utilisateur autorisé, je veux créer un Groupe (« + Groupe » dans le bandeau), le renommer et le supprimer, avec des noms uniques, afin de gérer mon rangement depuis l'interface.
+76. En tant qu'Utilisateur autorisé, je veux que supprimer un Groupe, après confirmation, renvoie ses Stores dans « Sans groupe » et efface ses Stores disparus, sans jamais toucher à la config Plakar, afin que le rangement reste sans risque.
+77. En tant qu'Utilisateur autorisé, je veux déplacer un Store d'un Groupe à l'autre et changer son ordre par glisser-déposer, afin de ranger vite.
+78. En tant qu'Utilisateur autorisé, je veux réordonner les Groupes en glissant leur en-tête par sa poignée, « Sans groupe » restant toujours en dernier, afin de mettre en haut ce qui compte.
+79. En tant qu'Utilisateur autorisé, je veux pouvoir faire tout cela sans JavaScript (liste déroulante « Groupe » et boutons ↑/↓ dans le dépliage), afin que le glisser-déposer reste un confort.
+80. En tant qu'Utilisateur autorisé, je veux qu'un Store nouvellement apparu aille en fin de « Sans groupe », et que « Sans groupe » ne s'affiche que s'il contient au moins un Store, afin de repérer ce qui reste à ranger.
+81. En tant qu'Utilisateur autorisé, je veux que l'en-tête de chaque Groupe montre le voyant du pire État de ses Stores et ses compteurs, et qu'il se replie (état gardé par le navigateur), afin de condenser ce qui va bien.
+82. En tant qu'Utilisateur autorisé, je veux qu'un Store retiré de la config Plakar alors qu'il était dans un Groupe y reste comme Store disparu, grisé, avec « Store supprimé » et un bouton « Retirer du groupe », afin de ne pas perdre mon rangement sur un `rm` suivi d'un `add`.
+83. En tant qu'Utilisateur autorisé, je veux qu'un Store qui réapparaît sous le même nom reprenne la place et le Seuil de retard de son Store disparu, afin de n'avoir rien à refaire.
+84. En tant qu'Utilisateur autorisé, je veux qu'un Store disparu n'ait ni État, ni Relevé, ni port d'Exploration, ni dernières valeurs affichées, afin de ne pas lire une information périmée ou d'un autre Kloset.
+85. En tant qu'Utilisateur autorisé, je veux qu'un Store « Sans groupe » retiré disparaisse simplement, afin que « Sans groupe » ne se remplisse pas de Stores disparus.
+86. En tant qu'Utilisateur autorisé, je veux un compteur 👻 des Stores disparus dans le bandeau, hors des compteurs d'État et ignoré par « Tout relever », afin de savoir qu'il reste du ménage à faire.
+87. En tant qu'Utilisateur autorisé, je veux cliquer sur le nom d'un Groupe pour ouvrir son focus (`/?groupe=<nom>`, mot-clé réservé pour « Sans groupe »), qui n'affiche que ce Groupe avec un lien « ← Tous les groupes », afin de le mettre en favori.
+88. En tant qu'Utilisateur autorisé, je veux qu'en focus tout le bandeau ne porte que sur les Stores du Groupe (compteurs, 👻, et bouton « Relever le groupe »), afin que ce que je vois et ce que je déclenche correspondent.
+
 ## Implementation Decisions
 
 ### Forme générale
@@ -112,6 +144,14 @@ Un service léger, déployé en docker compose sur Unraid et accessible uniqueme
 - Volumes `appdata` : la config Plakar (le `stores.yml` du service, dédié et distinct de celui du Mac), le cache Plakar (indispensable : environ 1 min à froid contre environ 1 s à chaud, plusieurs Go) et le fichier d'état.
 - Le nom `unraid` est résolu depuis le conteneur par `extra_hosts` sur le sidecar, vers `UNRAID_IP` (obligatoire : depuis un LXC, `host-gateway` désignerait le LXC et non Unraid).
 - Pas de gestionnaire de secrets : les passphrases restent dans la config Plakar standard. Ce choix est assumé.
+
+### Interface (décidée le 2026-11-11)
+- Rendu côté serveur par les templates Go, comme avant : mêmes routes `POST` avec redirection vers la page, et mêmes attributs `data-store`, `data-field`, `data-commande`, qui restent le contrat des tests. Si l'interface grossit trop, on passera à une application front séparée sur une API JSON. Garder les routes et les attributs facilite ce passage.
+- Une feuille CSS écrite à la main, intégrée au binaire. Aucun framework, aucun CDN, aucune étape de build.
+- **Aucun JavaScript obligatoire** : tout fonctionne par formulaires. Un petit fichier JS fait main, intégré au binaire, ajoute seulement le glisser-déposer des Groupes (API HTML5 native, un `POST` puis rechargement) et retient l'état replié des Groupes (`localStorage`).
+- Le rafraîchissement pendant un Relevé en cours passe par `<meta http-equiv="refresh">`, émis seulement dans ce cas.
+- Nouvelle route `POST /releves` (Tout relever, ou Relever le groupe en focus).
+- Les Groupes, leur ordre, l'ordre des Stores et les Stores disparus sont de l'état propre au service, persisté de façon atomique dans le fichier d'état avec le reste. Un Store disparu garde son Groupe, sa place et son Seuil de retard, mais perd son port et son dernier Relevé.
 
 ### Modules
 - **Catalogue** : liste des Stores, lue dans la config Plakar via `plakar store show -json` (plakar v1.1.6 n'a pas de `store ls` ; le service ne garde que les noms, les secrets étant de toute façon masqués par plakar), triée par nom (plakar la rend dans un ordre aléatoire), plus l'état propre au service pour chaque Store : Seuil de retard éventuel, port d'Exploration attribué, résultat du dernier Relevé. Il attribue un port au premier Store apparu (le premier libre de la plage) et le libère quand le Store disparaît. Il persiste l'état de façon atomique.
@@ -155,7 +195,8 @@ Les champs sont : date RFC 3339 en UTC, ID court, taille (valeur + unité binair
 
   Ce seam couvre la lecture des lignes, l'Écart, l'État, l'attribution et la stabilité des ports, la liste blanche et les refus de la Commande de Store, l'absence de journalisation des commandes, le cycle de vie des Explorations et la vérification d'identité.
 - **Test de contrat avec le vrai `plakar`**, dans la version figée de l'image. Il crée un Kloset jetable dans un dossier temporaire, fait deux backups d'un petit dossier, puis vérifie que le service relève correctement le Dernier snapshot, le Snapshot précédent et l'Écart. Il échoue si une montée de version de Plakar change le format de sortie.
-- **Non testés automatiquement** : `tailscale serve`, le compose et le rendu visuel au-delà de « la bonne valeur dans la bonne ligne ». Ils sont vérifiés à la main au déploiement.
+- Les Groupes, les Stores disparus, le focus et « Tout relever » se testent par le même seam HTTP, en passant par les formulaires sans JS.
+- **Non testés automatiquement** : `tailscale serve`, le compose, le JavaScript (glisser-déposer, repli) et le rendu visuel au-delà de « la bonne valeur dans la bonne ligne ». Ils sont vérifiés à la main au déploiement.
 - **Prior art** : aucun. Le dépôt ne contient encore aucun code.
 
 ## Out of Scope
