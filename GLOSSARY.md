@@ -27,6 +27,7 @@ _À éviter_ : « sync », qui désigne chez Plakar la copie de snapshots entre 
 - _À jour_ : le Dernier snapshot est plus récent que le Seuil de retard.
 - _En retard_ : le Dernier snapshot dépasse le Seuil de retard.
 - _Injoignable_ : le dernier Relevé a échoué (réseau, identifiants, kloset illisible).
+Tant que son premier Relevé n'est pas terminé, un Store n'a pas encore d'État : il est affiché « Premier Relevé ».
 _À éviter_ : « décalage » pour parler de l'État ; « décalage » n'est pas l'Écart non plus.
 
 **Exploration**

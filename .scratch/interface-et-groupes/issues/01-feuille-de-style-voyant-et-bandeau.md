@@ -18,4 +18,4 @@
 
 ## Comments
 
-**2026-11-11 :** implémenté. Le voyant est une pastille CSS (vert, rouge, orange, comme le prototype) plutôt qu'un emoji ; elle est `aria-hidden`, le mot de l'État l'accompagne toujours. La feuille est servie sous `/static/style.css` par un serveur de fichiers générique sur le dossier `internal/web/static` intégré au binaire (le script des tickets suivants s'y ajoutera sans nouvelle route). Rendu visuel à vérifier à la main dans le navigateur (clair et sombre). « Premier Relevé » s'affiche à la place de l'État, mais n'est pas encore défini dans `GLOSSARY.md`.
+**2026-11-11 :** implémenté. Le voyant est une pastille CSS (vert, rouge, orange, comme le prototype) plutôt qu'un emoji ; elle est `aria-hidden`, le mot de l'État l'accompagne toujours. La feuille est servie sous `/static/style.css` par un serveur de fichiers générique sur le dossier `internal/web/static` intégré au binaire (le script des tickets suivants s'y ajoutera sans nouvelle route). Rendu visuel à vérifier à la main dans le navigateur (clair et sombre). « Premier Relevé » s'affiche à la place de l'État ; le glossaire le définit comme l'absence d'État avant la fin du premier Relevé.
