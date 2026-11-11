@@ -318,3 +318,19 @@ func (c *Catalogue) SupprimerGroupe(nom string) error {
 		return nil
 	})
 }
+
+// Membres renvoie les Stores du Groupe qui porte ce nom, ou de « Sans groupe »
+// (SansGroupe), dans l'ordre. Un Groupe inconnu est refusé par
+// ErrUnknownGroupe.
+func (c *Catalogue) Membres(nom string) ([]string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if nom == SansGroupe {
+		return slices.Clone(c.sansGroupe), nil
+	}
+	i := c.groupe(nom)
+	if i < 0 {
+		return nil, ErrUnknownGroupe
+	}
+	return slices.Clone(c.groupes[i].membres), nil
+}

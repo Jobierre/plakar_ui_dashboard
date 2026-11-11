@@ -376,3 +376,8 @@ pre.terminal {
   .kv { grid-template-columns: 1fr; }
   .kv dt { margin-top: 4px; }
 }
+
+/* Focus sur un Groupe : le lien de retour, et le nom du Groupe qui y mène. */
+.focus { margin: 0 0 12px; }
+.groupe-entete h2 a { color: inherit; text-decoration: none; }
+.groupe-entete h2 a:hover { text-decoration: underline; }

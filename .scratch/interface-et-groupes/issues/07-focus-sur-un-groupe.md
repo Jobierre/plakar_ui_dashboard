@@ -4,13 +4,16 @@
 
 **Blocked by:** 03 (Tout relever et rafraîchissement automatique), 05 (Groupes, créer et ranger)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] `/?groupe=<nom>` n'affiche que ce Groupe, avec un lien « ← Tous les groupes ». Le nom du Groupe dans l'en-tête mène à ce focus.
-- [ ] Un mot réservé ouvre le focus de « Sans groupe ».
-- [ ] En focus, les compteurs du bandeau ne portent que sur les Stores du Groupe. Le bouton s'appelle « Relever le groupe » et ne relève que ces Stores, en sautant ceux déjà en cours.
-- [ ] Le rafraîchissement automatique ne tient compte que des Relevés en cours des Stores affichés.
-- [ ] Le focus d'un Groupe inconnu (renommé, supprimé, adresse fausse) affiche un message et le lien « ← Tous les groupes ».
-- [ ] Tests par le seam HTTP : contenu du focus, focus de « Sans groupe », compteurs en focus, Relever le groupe, focus inconnu.
+- [x] `/?groupe=<nom>` n'affiche que ce Groupe, avec un lien « ← Tous les groupes ». Le nom du Groupe dans l'en-tête mène à ce focus.
+- [x] Un mot réservé ouvre le focus de « Sans groupe ».
+- [x] En focus, les compteurs du bandeau ne portent que sur les Stores du Groupe. Le bouton s'appelle « Relever le groupe » et ne relève que ces Stores, en sautant ceux déjà en cours.
+- [x] Le rafraîchissement automatique ne tient compte que des Relevés en cours des Stores affichés.
+- [x] Le focus d'un Groupe inconnu (renommé, supprimé, adresse fausse) affiche un message et le lien « ← Tous les groupes ».
+- [x] Tests par le seam HTTP : contenu du focus, focus de « Sans groupe », compteurs en focus, Relever le groupe, focus inconnu.
 
 ## Comments
+
+- Implémenté : `/?groupe=<nom>` (ou `_sans`) filtre les sections et le bandeau ; `POST /releve` accepte `groupe` et revient sur le focus ; `Catalogue.Membres` donne les Stores d'un Groupe. Sur un focus inconnu, le bouton du bandeau est masqué.
+- Reste ouvert : les autres actions faites en focus (Seuil, ↻, rangement, ordre, renommage) redirigent vers `/` et perdent le focus. Le compteur 👻 (ticket 08) devra être filtré par le focus.

@@ -12,6 +12,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -85,7 +86,9 @@ type Explorations interface {
 func Handler(c Dashboard) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		c.render(w, r, http.StatusOK, view{accueil: true})
+		// ?groupe=<nom> ouvre le focus d'un Groupe, ou de « Sans groupe »
+		// (catalogue.SansGroupe).
+		c.render(w, r, http.StatusOK, view{accueil: true, focus: r.URL.Query().Get("groupe")})
 	})
 	// La feuille de style et le script, derrière l'Accès comme le reste.
 	mux.Handle("GET /static/", http.FileServerFS(static))
@@ -124,17 +127,28 @@ func Handler(c Dashboard) http.Handler {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	})
 	mux.HandleFunc("POST /releve", func(w http.ResponseWriter, r *http.Request) {
-		entries := c.Catalogue.Entries()
-		names := make([]string, 0, len(entries))
-		for _, e := range entries {
-			names = append(names, e.Name)
+		// Sans Groupe, « Tout relever » relève chaque Store ; avec un Groupe
+		// (le focus), « Relever le groupe » ne relève que les siens.
+		groupe, retour := r.FormValue("groupe"), "/"
+		var names []string
+		if groupe == "" {
+			for _, e := range c.Catalogue.Entries() {
+				names = append(names, e.Name)
+			}
+		} else {
+			var err error
+			if names, err = c.Catalogue.Membres(groupe); err != nil {
+				c.refuserRangement(w, r, err, cibleRangement{Groupe: groupe}, &rangementRefused{})
+				return
+			}
+			retour = "/?groupe=" + url.QueryEscape(groupe)
 		}
 		if err := c.TriggerAll(names); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		// La page montre alors les Relevés en cours, et se rafraîchit seule.
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, retour, http.StatusSeeOther)
 	})
 	mux.HandleFunc("POST /groupes", func(w http.ResponseWriter, r *http.Request) {
 		nom := r.FormValue("nom")
@@ -343,7 +357,10 @@ type explorationRefused struct {
 // accueil marque la page d'accueil elle-même, et non la réponse directe à un
 // POST : seule elle peut se recharger sans perdre ce qu'elle affiche.
 type view struct {
-	accueil     bool
+	accueil bool
+	// focus désigne le seul Groupe à afficher (ou catalogue.SansGroupe),
+	// vide pour tous les Groupes.
+	focus       string
 	seuil       *seuilRefused
 	exploration *explorationRefused
 	rangement   *rangementRefused
@@ -381,6 +398,10 @@ type section struct {
 	// nom refusé, dans son champ.
 	MenuOuvert bool
 	NomSaisi   string
+	// parEtat compte ses Stores par État, enCours ceux dont un Relevé est en
+	// cours : le bandeau les additionne sur les Groupes affichés.
+	parEtat [etat.Injoignable + 1]int
+	enCours int
 }
 
 // choixGroupe est un rangement proposé par la liste déroulante « Groupe ».
@@ -404,28 +425,20 @@ func pire(parEtat [etat.Injoignable + 1]int) string {
 // avec ce que v y ajoute.
 func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, v view) {
 	now := c.Now()
-	// Injoignable est le dernier État.
-	var parEtat [etat.Injoignable + 1]int
-	// enCours compte les Stores dont un Relevé est en cours, total les Stores
-	// affichés.
-	enCours, total := 0, 0
 	// index numérote les Stores de la page, pour nommer leurs formulaires.
 	index := 0
-	newRows := func(entries []catalogue.Entry) ([]row, [etat.Injoignable + 1]int) {
-		rows := make([]row, 0, len(entries))
-		var duGroupe [etat.Injoignable + 1]int
+	newRows := func(s *section, entries []catalogue.Entry) {
+		s.Rows = make([]row, 0, len(entries))
 		for _, e := range entries {
 			line := c.newRow(e, now)
 			line.Index = index
 			index++
-			total++
 			if line.EnCours {
-				enCours++
+				s.enCours++
 			}
 			// Un Store sans Relevé terminé n'est compté nulle part.
 			if line.etat != nil {
-				parEtat[*line.etat]++
-				duGroupe[*line.etat]++
+				s.parEtat[*line.etat]++
 			}
 			// Le dépliage d'un Store s'ouvre de lui-même sur l'action qui vient
 			// d'y échouer.
@@ -440,9 +453,8 @@ func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, v 
 				line.ExplorationError = v.exploration.err
 				line.Open = true
 			}
-			rows = append(rows, line)
+			s.Rows = append(s.Rows, line)
 		}
-		return rows, duGroupe
 	}
 	groupes, sans := c.Catalogue.Groupes()
 	// choix sont les rangements proposés par la liste déroulante « Groupe » :
@@ -454,7 +466,9 @@ func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, v 
 	choix = append(choix, choixGroupe{Cle: catalogue.SansGroupe, Nom: sansGroupeNom})
 	sections := make([]section, 0, len(groupes)+1)
 	add := func(cle, nom string, entries []catalogue.Entry) {
-		rows, duGroupe := newRows(entries)
+		s := section{Cle: cle, Nom: nom, NomSaisi: nom}
+		newRows(&s, entries)
+		rows := s.Rows
 		for i := range rows {
 			rows[i].Choix = choix
 			rows[i].Groupe = cle
@@ -462,7 +476,7 @@ func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, v 
 		if len(rows) > 0 {
 			rows[0].Premier, rows[len(rows)-1].Dernier = true, true
 		}
-		s := section{Cle: cle, Nom: nom, Voyant: pire(duGroupe), Compteurs: compteurs(duGroupe), Rows: rows, NomSaisi: nom}
+		s.Voyant, s.Compteurs = pire(s.parEtat), compteurs(s.parEtat)
 		if v.rangement != nil && v.rangement.Renommage == cle {
 			s.MenuOuvert, s.NomSaisi = true, v.rangement.Nom
 		}
@@ -472,10 +486,32 @@ func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, v 
 		add(g.Nom, g.Nom, g.Stores)
 		sections[i].Premier, sections[i].Dernier = i == 0, i == len(groupes)-1
 	}
-	// « Sans groupe » vient en dernier, et seulement s'il a des Stores.
-	if len(sans) > 0 {
+	// « Sans groupe » vient en dernier, et seulement s'il a des Stores, ou
+	// que son focus est ouvert.
+	if len(sans) > 0 || v.focus == catalogue.SansGroupe {
 		add(catalogue.SansGroupe, sansGroupeNom, sans)
 		sections[len(sections)-1].Fixe = true
+	}
+	// En focus, seul le Groupe visé s'affiche, s'il existe.
+	inconnu := false
+	if v.focus != "" {
+		i := slices.IndexFunc(sections, func(s section) bool { return s.Cle == v.focus })
+		inconnu = i < 0
+		if inconnu {
+			sections = nil
+		} else {
+			sections = sections[i : i+1]
+		}
+	}
+	// Le bandeau ne compte que les Stores affichés.
+	var parEtat [etat.Injoignable + 1]int
+	enCours, total := 0, 0
+	for _, s := range sections {
+		for st, n := range s.parEtat {
+			parEtat[st] += n
+		}
+		enCours += s.enCours
+		total += len(s.Rows)
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	// La page porte les jetons des Explorations en cours, et la sortie d'une
@@ -498,14 +534,20 @@ func (c Dashboard) render(w http.ResponseWriter, r *http.Request, status int, v 
 		// à rendre au formulaire « + Groupe ».
 		Rangement *rangementRefused
 		Commande  *commandeResult
+		// Focus désigne le Groupe en focus, vide pour tous les Groupes ;
+		// FocusInconnu : il n'existe pas (renommé, supprimé, adresse fausse).
+		Focus        string
+		FocusInconnu bool
 	}{
-		User:        acces.User(r.Context()),
-		Compteurs:   compteurs(parEtat),
-		ToutEnCours: enCours == total,
-		Rafraichir:  v.accueil && enCours > 0,
-		Groupes:     sections,
-		Rangement:   v.rangement,
-		Commande:    v.commande,
+		User:         acces.User(r.Context()),
+		Compteurs:    compteurs(parEtat),
+		ToutEnCours:  enCours == total,
+		Rafraichir:   v.accueil && enCours > 0,
+		Groupes:      sections,
+		Rangement:    v.rangement,
+		Commande:     v.commande,
+		Focus:        v.focus,
+		FocusInconnu: inconnu,
 	}
 	if err := page.Execute(w, data); err != nil {
 		c.Log.Error("rendu du tableau de bord", "err", err)

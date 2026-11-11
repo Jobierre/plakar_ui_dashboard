@@ -22,11 +22,19 @@
 <summary>+ Groupe</summary>
 <form method="post" action="/groupes"><input name="nom" value="{{with .Rangement}}{{.Nom}}{{end}}" placeholder="Nom du Groupe" aria-label="Nom du nouveau Groupe" required> <button>Créer</button></form>
 </details>
-<form method="post" action="/releve" class="tout-relever"><button class="primaire" data-tout-relever{{if .ToutEnCours}} disabled{{end}}><span aria-hidden="true">↻</span> Tout relever</button></form>
+{{- if not .FocusInconnu}}
+<form method="post" action="/releve" class="tout-relever">{{with .Focus}}<input type="hidden" name="groupe" value="{{.}}">{{end}}<button class="primaire" data-tout-relever{{if .ToutEnCours}} disabled{{end}}><span aria-hidden="true">↻</span> {{if .Focus}}Relever le groupe{{else}}Tout relever{{end}}</button></form>
+{{- end}}
 <div class="bascule" role="group" aria-label="Vue" data-bascule hidden><button type="button" data-vue="simple">Simple</button><button type="button" data-vue="detaillee">Détaillée</button></div>
 <p class="utilisateur">Connecté en tant que <span id="utilisateur">{{.User}}</span></p>
 </header>
 <main>
+{{- if .Focus}}
+<p class="focus"><a href="/" data-tous-les-groupes>← Tous les groupes</a></p>
+{{- if .FocusInconnu}}
+<p class="erreur alerte" role="alert" data-focus-inconnu>Le Groupe « {{.Focus}} » n'existe pas : il a peut-être été renommé ou supprimé.</p>
+{{- end}}
+{{- end}}
 {{- with .Rangement}}
 <p class="erreur alerte" role="alert" data-rangement-erreur>{{.Err}}</p>
 {{- end}}
@@ -35,7 +43,7 @@
 <section class="groupe" data-groupe="{{.Cle}}" aria-label="{{.Nom}}">
 <header class="groupe-entete" data-groupe-entete>
 {{- with .Voyant}}<span class="voyant {{.}}" data-groupe-voyant="{{.}}" aria-hidden="true"></span>{{end}}
-<h2 data-groupe-nom>{{.Nom}}</h2>
+<h2 data-groupe-nom><a href="/?groupe={{.Cle}}" title="N'afficher que ce Groupe">{{.Nom}}</a></h2>
 <ul class="compteurs" aria-label="Stores de {{.Nom}} par État">
 {{- range .Compteurs}}{{if .N}}<li><span class="voyant {{.Voyant}}" aria-hidden="true"></span> <span data-groupe-compteur="{{.Voyant}}">{{.N}}</span> {{.Etat}}</li>{{end}}{{end}}
 </ul>
