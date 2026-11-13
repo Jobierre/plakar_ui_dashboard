@@ -41,8 +41,9 @@
 {{- end}}
 <div class="stores" aria-label="Stores">
 {{- range .Groupes}}
-<section class="groupe" data-groupe="{{.Cle}}" aria-label="{{.Nom}}">
+<section class="groupe" data-groupe="{{.Cle}}"{{if .Fixe}} data-fixe{{end}} aria-label="{{.Nom}}">
 <header class="groupe-entete" data-groupe-entete>
+{{- if not .Fixe}}<span class="poignee" data-poignee draggable="true" title="Glisser pour déplacer le Groupe" aria-hidden="true" hidden>⠿</span>{{end}}
 {{- with .Voyant}}<span class="voyant {{.}}" data-groupe-voyant="{{.}}" aria-hidden="true"></span>{{end}}
 <h2 data-groupe-nom><a href="/?groupe={{.Cle}}" title="N'afficher que ce Groupe">{{.Nom}}</a></h2>
 <ul class="compteurs" aria-label="Stores de {{.Nom}} par État">
@@ -62,6 +63,7 @@
 </div>
 </details>
 {{- end}}
+<button type="button" class="chevron" data-chevron aria-expanded="true" aria-label="Replier ou déplier {{.Nom}}" title="Replier ou déplier" hidden>▾</button>
 </header>
 <div class="membres">
 <div class="entete" aria-hidden="true"><span>État</span><span>Store</span><span>Dernier snapshot</span><span>Taille</span><span>Écart</span><span>Relevé</span><span></span></div>

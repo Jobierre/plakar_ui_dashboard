@@ -399,3 +399,40 @@ pre.terminal {
 .vue-simple .store.disparu:hover { border-color: var(--line); }
 .bandeau .compteur-disparus { margin: 0; color: var(--muted); }
 .bandeau .compteur-disparus [data-compteur] { font-weight: 600; }
+
+/* Gestes de l'en-tête d'un Groupe, chacun à sa place : la poignée ⠿ pour
+   glisser, le nom pour le focus, le menu ⋯, et le chevron pour replier, à
+   droite. Poignée et chevron ne marchent qu'avec le script, qui les affiche. */
+.poignee { cursor: grab; color: var(--muted); user-select: none; padding: 0 2px; }
+.poignee[hidden], .chevron[hidden] { display: none; }
+.groupe-entete .chevron {
+  margin-left: auto;
+  padding: 1px 8px;
+  background: none;
+  border-color: transparent;
+  color: var(--muted);
+}
+.groupe-entete form.ordre ~ .chevron { margin-left: 0; }
+/* Un Groupe replié ne garde que son en-tête : voyant du pire État et
+   compteurs. */
+.groupe.replie .membres { display: none; }
+
+/* Glisser-déposer : l'élément glissé s'estompe, et un trait marque où il
+   tombera (au-dessus, en dessous, à gauche ou à droite selon la mise en
+   page), ou un cadre le Groupe qui le recevra à la fin. */
+.glisse { opacity: .4; }
+.depot-dans { outline: 2px dashed var(--accent); outline-offset: 3px; border-radius: var(--radius); }
+.depot-haut { box-shadow: 0 -6px 0 -3px var(--accent); }
+.depot-bas { box-shadow: 0 6px 0 -3px var(--accent); }
+.depot-gauche { box-shadow: -6px 0 0 -3px var(--accent); }
+.depot-droite { box-shadow: 6px 0 0 -3px var(--accent); }
+/* Les lignes de la vue détaillée sont collées dans un cadre qui rogne ce qui
+   dépasse : le trait passe dedans. */
+.vue-detaillee .membres .depot-haut { box-shadow: inset 0 3px 0 var(--accent); }
+.vue-detaillee .membres .depot-bas { box-shadow: inset 0 -3px 0 var(--accent); }
+/* Dans une colonne de la vue simple, l'en-tête tient sur une ligne : les
+   compteurs, puis le nom, s'effacent avant les gestes. */
+.vue-simple .groupe-entete { flex-wrap: nowrap; gap: 8px; }
+.vue-simple .groupe-entete h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vue-simple .groupe-entete .compteurs { flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; }
+.vue-simple .groupe-entete > :is(.poignee, .voyant, form, details, button) { flex: none; }
