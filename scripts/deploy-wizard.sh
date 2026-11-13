@@ -288,8 +288,8 @@ stage "Dossiers appdata"
 say "Docker créerait les dossiers manquants en root, et plakar-ui (UID 1000) ne"
 say "pourrait pas y écrire. Sur le LXC :"
 note "    A=${PLAKAR_UI_APPDATA}"
-note '    mkdir -p "$A"/{tailscale,serve,plakar-config,plakar-cache,state}'
-note '    chown 1000:1000 "$A"/{serve,plakar-config,plakar-cache,state}'
+note '    mkdir -p "$A"/{tailscale,serve,plakar-config,plakar-cache,plakar-data,state}'
+note '    chown 1000:1000 "$A"/{serve,plakar-config,plakar-cache,plakar-data,state}'
 note '    chmod 700 "$A/plakar-config"'
 warn "plakar-config contiendra tes passphrases en clair : traite ce dossier comme sensible."
 pause "Entrée une fois les dossiers prêts"

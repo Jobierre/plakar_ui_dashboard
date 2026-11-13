@@ -30,13 +30,20 @@ ENV PLAKAR_UI_CONTRACT_PLAKAR=/usr/local/bin/plakar
 RUN go test -count=1 -run Contract -v ./internal/app/ \
  && cp /out/plakar-ui /out/plakar-ui.contrat
 
-FROM alpine:3.24
+# Base glibc, et non alpine (musl) : les plugins installés par `plakar pkg add`
+# (s3…) sont des binaires publiés par Plakar, liés à la glibc. Sous musl, leur
+# chargeur /lib64/ld-linux-x86-64.so.2 manque et plakar échoue sur un trompeur
+# « fork/exec …/s3Storage: no such file or directory ».
+FROM debian:bookworm-slim
 # Certificats pour joindre les Stores en HTTPS (S3…). L'utilisateur plakar a
 # un UID fixe : les dossiers appdata lui appartiennent (chown 1000:1000).
-RUN apk add --no-cache ca-certificates \
- && addgroup -g 1000 plakar \
- && adduser -D -u 1000 -G plakar -h /home/plakar plakar \
- && mkdir -p /home/plakar/.config/plakar /home/plakar/.cache/plakar /data /serve \
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd -g 1000 plakar \
+ && useradd -m -u 1000 -g plakar -d /home/plakar -s /usr/sbin/nologin plakar \
+ && mkdir -p /home/plakar/.config/plakar /home/plakar/.cache/plakar \
+             /home/plakar/.local/share/plakar /data /serve \
  && chown -R plakar:plakar /home/plakar /data /serve
 COPY --from=plakar /out/plakar /usr/local/bin/plakar
 # Copié depuis l'étage `contract` : l'image n'existe que si le test de contrat
@@ -50,8 +57,9 @@ ENV PLAKAR_UI_ADDR=127.0.0.1:8080 \
     PLAKAR_UI_PLAKAR_BIN=/usr/local/bin/plakar \
     PLAKAR_UI_STATE=/data/plakar-ui-state.json \
     PLAKAR_UI_SERVE_CONFIG=/serve/serve.json
-# Config plakar (stores.yml, passphrases : sensible), cache plakar, état.
-VOLUME ["/home/plakar/.config/plakar", "/home/plakar/.cache/plakar", "/data"]
+# Config plakar (stores.yml, passphrases : sensible), cache plakar, paquets
+# plakar (plugins de `plakar pkg add`, perdus sinon à chaque recréation), état.
+VOLUME ["/home/plakar/.config/plakar", "/home/plakar/.cache/plakar", "/home/plakar/.local/share/plakar", "/data"]
 # Au premier lancement sur un cache neuf, plakar imprime sur sa sortie standard
 # un avis sur son contrôle de mises à jour, qui fausserait la première sortie
 # lue par le service. L'image tranche avant lui : contrôle désactivé (réglage

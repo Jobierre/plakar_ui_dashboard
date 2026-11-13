@@ -7,8 +7,8 @@
 # Les dossiers de PLAKAR_UI_APPDATA sont à préparer avant `docker compose up`
 # (sinon Docker les crée en root, et plakar-ui ne peut pas y écrire) et doivent
 # appartenir à 1000:1000, l'utilisateur de l'image :
-#   mkdir -p $PLAKAR_UI_APPDATA/{tailscale,serve,plakar-config,plakar-cache,state}
-#   chown 1000:1000 $PLAKAR_UI_APPDATA/{serve,plakar-config,plakar-cache,state}
+#   mkdir -p $PLAKAR_UI_APPDATA/{tailscale,serve,plakar-config,plakar-cache,plakar-data,state}
+#   chown 1000:1000 $PLAKAR_UI_APPDATA/{serve,plakar-config,plakar-cache,plakar-data,state}
 #   chmod 700 $PLAKAR_UI_APPDATA/plakar-config
 
 services:
@@ -62,6 +62,8 @@ services:
     volumes:
       - ${PLAKAR_UI_APPDATA}/plakar-config:/home/plakar/.config/plakar
       - ${PLAKAR_UI_APPDATA}/plakar-cache:/home/plakar/.cache/plakar
+      # Paquets installés par `plakar pkg add` (plugins s3…).
+      - ${PLAKAR_UI_APPDATA}/plakar-data:/home/plakar/.local/share/plakar
       - ${PLAKAR_UI_APPDATA}/state:/data
       - ${PLAKAR_UI_APPDATA}/serve:/serve
     restart: unless-stopped

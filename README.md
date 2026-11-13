@@ -100,8 +100,8 @@ cp .env.example .env    # puis remplir
 
 # 2. Dossiers persistants, à l'utilisateur 1000:1000 de l'image
 #    (sinon Docker les crée en root)
-mkdir -p $PLAKAR_UI_APPDATA/{tailscale,serve,plakar-config,plakar-cache,state}
-chown 1000:1000 $PLAKAR_UI_APPDATA/{serve,plakar-config,plakar-cache,state}
+mkdir -p $PLAKAR_UI_APPDATA/{tailscale,serve,plakar-config,plakar-cache,plakar-data,state}
+chown 1000:1000 $PLAKAR_UI_APPDATA/{serve,plakar-config,plakar-cache,plakar-data,state}
 chmod 700 $PLAKAR_UI_APPDATA/plakar-config
 
 # 3. Construction et démarrage
